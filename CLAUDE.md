@@ -119,14 +119,21 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   "Kopiera" button in the zone room list. For quick "Kök v2 / test" variants.
 
 ### Budget & tidsplan (Budget.jsx)
-- `#/budget` page, stored in its own space record **`space:budget`** (syncs + versions with
-  zero plumbing — reuses `useSpace("budget")`). Shape:
-  `{ phases: [{ id, name, period, items: [{ id, desc, qty, unit, price, status }] }] }`.
-  Seeds 9 default phases (Markarbeten → Garage, chronological) when empty. Excel-like:
-  line total = `qty × price` (qty/price stored as strings, parsed comma/space-tolerant),
-  per-phase subtotal + share bar, grand total + per-status breakdown (Uppskattad/Offert/
-  Faktisk). Phases: rename, reorder (↑/↓), add/remove, per-phase "Tidplan" free text.
-  Read-only respects `canEdit()`. Not yet in the PDF export.
+- `#/budget` page, stored in its own space record **`space:budget`** (syncs + versions,
+  reuses `useSpace("budget")`). Shape (flat tagged items + dated phases):
+  `phases: [{ id, name, start, end }]` (start/end = YYYY-MM-DD),
+  `items: [{ id, desc, phaseId, roomId, category, qty, unit, estUnit, quote, actual }]`.
+  Seeds 9 default phases (Markarbeten → Garage) when empty; `roomId` links to `vs:v1:rooms`
+  (""=Övergripande); categories = Material/Arbete/Underentreprenör/Övrigt.
+- Per line: **Uppskattat = qty × estUnit** (qty blank → estUnit is a lump sum);
+  **Offert**/**Faktiskt** are entered amounts; **Gällande** = Faktiskt ›› Offert ›› Uppskattat.
+  Numbers stored as strings, parsed comma/space-tolerant. Summary: Gällande total +
+  Uppskattat/Offert/Faktiskt + avvikelse + per-kategori.
+- **Gruppera efter Fas / Rum / Kategori** (flat items regrouped client-side; leftovers land
+  in an "Ej tilldelad"/"(borttagna rum)" group). Each row edits all three tags via dropdowns.
+- **Tidslinje**: date-based Gantt from phase start/end (month ticks). Phases: rename, set
+  start/end dates, reorder (↑/↓), add/remove. Read-only respects `canEdit()`.
+- Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)
 

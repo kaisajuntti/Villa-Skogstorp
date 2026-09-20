@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useSpace, useRooms } from "../state.js";
 import { spaceKey } from "../storage.js";
 import { canEdit } from "../config.js";
@@ -13,6 +13,11 @@ const DEFAULT_PHASES = [
 const CATS = ["Material", "Arbete", "Övrigt"];
 const CAT_SHORT = { "Material": "Material", "Arbete": "Arbete", "Övrigt": "Övrigt" };
 const OVERGRIP = "Övergripande";
+// "Del" = byggdel/moment (free text). These are just suggestions in a datalist —
+// you can type anything ("Kök", "Trädäck", …). Used for sub-headers within a group.
+const DELAR = ["Golv", "Golvbeklädnad", "Yttervägg", "Fasad", "Innervägg", "Väggbeklädnad", "Dränering", "Tak", "VVS", "El", "Övrigt"];
+const NODEL = "Ej angiven del";
+const delOrder = (d) => { const i = DELAR.indexOf(d); return i < 0 ? DELAR.length : i; };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const parseNum = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
@@ -54,25 +59,34 @@ export default function Budget() {
   const delItem = (id) => setItems(items.filter((x) => x.id !== id));
   const addItem = (preset) => setItems([...items, {
     id: uid(), desc: "", phaseId: phases[0]?.id || "", roomId: "", category: "Material",
-    entreprenor: "", qty: "", unit: "", estUnit: "", quote: "", actual: "", ...preset,
+    entreprenor: "", del: "", qty: "", unit: "", estUnit: "", quote: "", actual: "", ...preset,
   }]);
 
   // ---- totals ----
-  let sumEst = 0, sumQuote = 0, sumActual = 0, sumCur = 0; const byCat = {};
+  let sumEst = 0, sumQuote = 0, sumActual = 0, sumCur = 0; const byCat = {}; const byDel = {};
   for (const it of items) {
     sumEst += est(it);
     if (hasVal(it.quote)) sumQuote += parseNum(it.quote);
     if (hasVal(it.actual)) sumActual += parseNum(it.actual);
     const c = current(it); sumCur += c;
     byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + c;
+    const d = (it.del || "").trim(); if (d) byDel[d] = (byDel[d] || 0) + c;
   }
   const dev = sumCur - sumEst;
+  const delKeys = Object.keys(byDel).sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
 
   // ---- grouping ----
   const phaseIds = new Set(phases.map((p) => p.id));
   let groups;
   if (groupBy === "category") {
     groups = CATS.map((c) => ({ key: c, label: c, preset: { category: c }, items: items.filter((i) => (i.category || "Övrigt") === c) }));
+  } else if (groupBy === "del") {
+    const names = [];
+    for (const it of items) { const n = (it.del || "").trim(); if (n && !names.includes(n)) names.push(n); }
+    names.sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
+    groups = names.map((n) => ({ key: n, label: n, preset: { del: n }, items: items.filter((i) => (i.del || "").trim() === n) }));
+    const none = items.filter((i) => !(i.del || "").trim());
+    if (none.length || !names.length) groups.push({ key: "_none", label: NODEL, preset: { del: "" }, items: none });
   } else if (groupBy === "ent") {
     const names = [];
     for (const it of items) { const n = (it.entreprenor || "").trim(); if (n && !names.includes(n)) names.push(n); }
@@ -110,10 +124,81 @@ export default function Budget() {
   }
   const LABELW = 140;
 
+  // One item row — shared by the flat and the del-clustered rendering.
+  const renderRow = (it) => (
+    <tr key={it.id} style={{ borderTop: "1px solid var(--line)" }}>
+      <td style={td()}>{ro ? (it.desc || "—") : <input type="text" value={it.desc} placeholder="Beskrivning" title={it.desc || ""} onChange={(e) => patchItem(it.id, { desc: e.target.value })} style={{ ...cell, minWidth: 220 }} />}</td>
+      {groupBy !== "phase" && <td style={td()}>{ro ? (phases.find((p) => p.id === it.phaseId)?.name || "—") : (
+        <select value={it.phaseId || ""} onChange={(e) => patchItem(it.id, { phaseId: e.target.value })} style={sel}>
+          <option value="">—</option>
+          {phases.map((p, i) => <option key={p.id} value={p.id}>{i + 1}. {p.name}</option>)}
+        </select>)}</td>}
+      {groupBy !== "del" && <td style={td()}>{ro ? (it.del || "—") : (
+        <>
+          <input type="text" list="budget-delar" value={it.del || ""} placeholder="t.ex. Golv" title={it.del || ""} onChange={(e) => patchItem(it.id, { del: e.target.value })} style={{ ...cell, minWidth: 110 }} />
+        </>)}</td>}
+      {groupBy !== "room" && <td style={td()}>{ro ? roomName(it.roomId) : (
+        <select value={it.roomId || ""} onChange={(e) => patchItem(it.id, { roomId: e.target.value })} style={sel}>
+          <option value="">{OVERGRIP}</option>
+          {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>)}</td>}
+      {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[it.category] || it.category) : (
+        <select value={CATS.includes(it.category) ? it.category : (it.category || "Material")} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={sel}>
+          {CATS.map((c) => <option key={c} value={c}>{CAT_SHORT[c]}</option>)}
+          {it.category && !CATS.includes(it.category) && <option value={it.category}>{it.category}</option>}
+        </select>)}</td>}
+      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle snickare" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, minWidth: 120 }} />}</td>}
+      <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 58, textAlign: "right" }} />}</td>
+      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 56 }} />}</td>
+      <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 78, textAlign: "right" }} />}</td>
+      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", color: "var(--muted)" }}>{kr(est(it))}</td>
+      <td style={td("right")}>{ro ? (hasVal(it.quote) ? kr(parseNum(it.quote)) : "—") : <input type="text" inputMode="decimal" value={it.quote} placeholder="kr" onChange={(e) => patchItem(it.id, { quote: e.target.value })} style={{ ...cell, width: 82, textAlign: "right" }} />}</td>
+      <td style={td("right")}>{ro ? (hasVal(it.actual) ? kr(parseNum(it.actual)) : "—") : <input type="text" inputMode="decimal" value={it.actual} placeholder="kr" onChange={(e) => patchItem(it.id, { actual: e.target.value })} style={{ ...cell, width: 82, textAlign: "right" }} />}</td>
+      {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
+    </tr>
+  );
+
+  // Render a group's rows: flat, or clustered under del sub-headers.
+  const renderBody = (g) => {
+    const useSub = groupBy !== "del" && g.items.some((it) => (it.del || "").trim());
+    if (!useSub) {
+      return (
+        <>
+          {g.items.map(renderRow)}
+          {g.items.length === 0 && <tr><td colSpan={13} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
+        </>
+      );
+    }
+    const map = new Map();
+    for (const it of g.items) { const d = (it.del || "").trim(); if (!map.has(d)) map.set(d, []); map.get(d).push(it); }
+    const keys = [...map.keys()].sort((a, b) => {
+      if (a === "") return 1; if (b === "") return -1;
+      return (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv");
+    });
+    return keys.map((k) => {
+      const arr = map.get(k);
+      const cEst = arr.reduce((s, it) => s + est(it), 0);
+      const cCur = arr.reduce((s, it) => s + current(it), 0);
+      return (
+        <Fragment key={k || "_none"}>
+          <tr>
+            <td colSpan={13} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 11.5, textTransform: "uppercase", letterSpacing: 0.5 }}>{k || NODEL}</span>
+                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)} <span style={{ color: "var(--muted)" }}>(uppsk. {kr(cEst)})</span></span>
+              </div>
+            </td>
+          </tr>
+          {arr.map(renderRow)}
+        </Fragment>
+      );
+    });
+  };
+
   return (
     <div className="page">
       <h1>BUDGET &amp; TIDSPLAN</h1>
-      <p className="sub">Grova uppskattningar i kronologisk ordning — fyll i mängd och á-pris så räknas summan ut. Lägg till offert och faktisk kostnad efter hand; tagga varje post med fas, rum, kategori och entreprenör (fritext, t.ex. "Pelle snickare").</p>
+      <p className="sub">Grova uppskattningar i kronologisk ordning — fyll i mängd och á-pris så räknas summan ut. Lägg till offert och faktisk kostnad efter hand; tagga varje post med fas, rum, kategori, entreprenör (fritext, t.ex. "Pelle snickare") och del/byggdel (Golv, Yttervägg, Ytskikt … — grupperas i underrubriker).</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
@@ -130,6 +215,11 @@ export default function Budget() {
         <div className="row" style={{ marginTop: 6, gap: 16, fontSize: 12, color: "var(--muted)" }}>
           {CATS.map((c) => <span key={c}>{CAT_SHORT[c]}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat[c] || 0)}</span></span>)}
         </div>
+        {delKeys.length > 0 && (
+          <div className="row" style={{ marginTop: 6, gap: 16, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
+            {delKeys.map((d) => <span key={d}>{d}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byDel[d])}</span></span>)}
+          </div>
+        )}
       </div>
 
       {/* phases + timeline */}
@@ -182,10 +272,14 @@ export default function Budget() {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Entreprenör"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Entreprenör"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>
+
+      <datalist id="budget-delar">
+        {DELAR.map((d) => <option key={d} value={d} />)}
+      </datalist>
 
       {groups.map((g) => {
         const gEst = g.items.reduce((s, it) => s + est(it), 0);
@@ -197,11 +291,12 @@ export default function Budget() {
               <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)} <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 12 }}>(uppsk. {kr(gEst)})</span></div>
             </div>
             <div style={{ overflowX: "auto", marginTop: 8 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 980, fontSize: 12.5 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1080, fontSize: 12.5 }}>
                 <thead>
                   <tr>
                     <th style={th()}>Post</th>
                     {groupBy !== "phase" && <th style={th()}>Fas</th>}
+                    {groupBy !== "del" && <th style={th()}>Del</th>}
                     {groupBy !== "room" && <th style={th()}>Rum</th>}
                     {groupBy !== "category" && <th style={th()}>Kat.</th>}
                     {groupBy !== "ent" && <th style={th()}>Entreprenör</th>}
@@ -215,35 +310,7 @@ export default function Budget() {
                   </tr>
                 </thead>
                 <tbody>
-                  {g.items.map((it) => (
-                    <tr key={it.id} style={{ borderTop: "1px solid var(--line)" }}>
-                      <td style={td()}>{ro ? (it.desc || "—") : <input type="text" value={it.desc} placeholder="Beskrivning" onChange={(e) => patchItem(it.id, { desc: e.target.value })} style={{ ...cell, minWidth: 130 }} />}</td>
-                      {groupBy !== "phase" && <td style={td()}>{ro ? (phases.find((p) => p.id === it.phaseId)?.name || "—") : (
-                        <select value={it.phaseId || ""} onChange={(e) => patchItem(it.id, { phaseId: e.target.value })} style={sel}>
-                          <option value="">—</option>
-                          {phases.map((p, i) => <option key={p.id} value={p.id}>{i + 1}. {p.name}</option>)}
-                        </select>)}</td>}
-                      {groupBy !== "room" && <td style={td()}>{ro ? roomName(it.roomId) : (
-                        <select value={it.roomId || ""} onChange={(e) => patchItem(it.id, { roomId: e.target.value })} style={sel}>
-                          <option value="">{OVERGRIP}</option>
-                          {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                        </select>)}</td>}
-                      {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[it.category] || it.category) : (
-                        <select value={CATS.includes(it.category) ? it.category : (it.category || "Material")} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={sel}>
-                          {CATS.map((c) => <option key={c} value={c}>{CAT_SHORT[c]}</option>)}
-                          {it.category && !CATS.includes(it.category) && <option value={it.category}>{it.category}</option>}
-                        </select>)}</td>}
-                      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle snickare" onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, minWidth: 120 }} />}</td>}
-                      <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 58, textAlign: "right" }} />}</td>
-                      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 56 }} />}</td>
-                      <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 78, textAlign: "right" }} />}</td>
-                      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", color: "var(--muted)" }}>{kr(est(it))}</td>
-                      <td style={td("right")}>{ro ? (hasVal(it.quote) ? kr(parseNum(it.quote)) : "—") : <input type="text" inputMode="decimal" value={it.quote} placeholder="kr" onChange={(e) => patchItem(it.id, { quote: e.target.value })} style={{ ...cell, width: 82, textAlign: "right" }} />}</td>
-                      <td style={td("right")}>{ro ? (hasVal(it.actual) ? kr(parseNum(it.actual)) : "—") : <input type="text" inputMode="decimal" value={it.actual} placeholder="kr" onChange={(e) => patchItem(it.id, { actual: e.target.value })} style={{ ...cell, width: 82, textAlign: "right" }} />}</td>
-                      {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
-                    </tr>
-                  ))}
-                  {g.items.length === 0 && <tr><td colSpan={12} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
+                  {renderBody(g)}
                 </tbody>
               </table>
             </div>

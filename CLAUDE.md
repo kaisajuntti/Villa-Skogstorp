@@ -122,19 +122,23 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - `#/budget` page, stored in its own space record **`space:budget`** (syncs + versions,
   reuses `useSpace("budget")`). Shape (flat tagged items + dated phases):
   `phases: [{ id, name, start, end }]` (start/end = YYYY-MM-DD),
-  `items: [{ id, desc, phaseId, roomId, category, entreprenor, qty, unit, estUnit, quote, actual }]`.
+  `items: [{ id, desc, phaseId, roomId, category, entreprenor, del, qty, unit, estUnit, quote, actual }]`.
   Seeds 9 default phases (Markarbeten → Garage) when empty; `roomId` links to `vs:v1:rooms`
   (""=Övergripande); categories = Material/Arbete/Övrigt (kostnadstyp). `entreprenor` is
   free text — name the actual craftsman ("Pelle snickare", "Jonas målare"), not a fixed list.
+  `del` = byggdel/moment, also free text with datalist suggestions (`DELAR`: Golv,
+  Golvbeklädnad, Yttervägg, Fasad, Innervägg, Väggbeklädnad, Dränering, Tak, VVS, El, Övrigt).
   Legacy "Underentreprenör" category values are tolerated (shown as an extra select option).
 - Per line: **Uppskattat = qty × estUnit** (qty blank → estUnit is a lump sum);
   **Offert**/**Faktiskt** are entered amounts; **Gällande** = Faktiskt ›› Offert ›› Uppskattat.
   Numbers stored as strings, parsed comma/space-tolerant. Summary: Gällande total +
-  Uppskattat/Offert/Faktiskt + avvikelse + per-kategori.
-- **Gruppera efter Fas / Rum / Kategori / Entreprenör** (flat items regrouped client-side;
-  leftovers land in an "Ej tilldelad"/"(borttagna rum)"/"Ej angiven entreprenör" group).
-  Grouping by Entreprenör = distinct free-text values, so "hur mycket går till Pelle snickare".
-  Each row edits its tags via dropdowns + the free-text entreprenör input.
+  Uppskattat/Offert/Faktiskt + avvikelse + per-kategori + per-del (when any del set).
+- **Gruppera efter Fas / Del / Rum / Kategori / Entreprenör** (flat items regrouped
+  client-side; leftovers land in an "Ej tilldelad"/"(borttagna rum)"/"Ej angiven …" group).
+  Each row edits its tags via dropdowns + free-text entreprenör/del inputs.
+- **Underrubriker (`del`)**: within every group card (except when grouping *by* del), rows
+  are clustered under del sub-headers (in `DELAR` order, "" last as "Ej angiven del") with a
+  per-del subtotal — via `renderBody`/`renderRow`. No del values anywhere → flat table.
 - **Tidslinje**: date-based Gantt from phase start/end (month ticks). Phases: rename, set
   start/end dates, reorder (↑/↓), add/remove. Read-only respects `canEdit()`.
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.

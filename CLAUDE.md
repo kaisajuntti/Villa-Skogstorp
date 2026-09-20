@@ -38,6 +38,7 @@ Live URL: `https://kaisajuntti.github.io/Villa-Skogstorp/`.
 ```
 #/                  Översikt — clickable situationsplan snippet + zone legend
 #/projekt           Project-level: dokument, färgschema, anteckningar, export/import
+#/budget            Budget & tidsplan — phased cost estimate (Excel-like)
 #/omrade/<zoneId>   Zone: description + room list (add/rename/delete rooms)
 #/rum/<roomId>      Room: tabs Planritning · Färger · Dokument · Anteckningar
 ```
@@ -116,6 +117,16 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 ### Room duplication
 - `copyRoom(id, name)` (state.js) duplicates a room's plan + space under a new id/name —
   "Kopiera" button in the zone room list. For quick "Kök v2 / test" variants.
+
+### Budget & tidsplan (Budget.jsx)
+- `#/budget` page, stored in its own space record **`space:budget`** (syncs + versions with
+  zero plumbing — reuses `useSpace("budget")`). Shape:
+  `{ phases: [{ id, name, period, items: [{ id, desc, qty, unit, price, status }] }] }`.
+  Seeds 9 default phases (Markarbeten → Garage, chronological) when empty. Excel-like:
+  line total = `qty × price` (qty/price stored as strings, parsed comma/space-tolerant),
+  per-phase subtotal + share bar, grand total + per-status breakdown (Uppskattad/Offert/
+  Faktisk). Phases: rename, reorder (↑/↓), add/remove, per-phase "Tidplan" free text.
+  Read-only respects `canEdit()`. Not yet in the PDF export.
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)
 

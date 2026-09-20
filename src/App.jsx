@@ -4,6 +4,7 @@ import { gateEnabled, isUnlocked, canEdit, clearAccess } from "./config.js";
 import { syncPull } from "./storage.js";
 import Overview from "./pages/Overview.jsx";
 import Project from "./pages/Project.jsx";
+import Budget from "./pages/Budget.jsx";
 import Zone from "./pages/Zone.jsx";
 import Room from "./pages/Room.jsx";
 import Lock from "./pages/Lock.jsx";
@@ -13,6 +14,7 @@ function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   const [seg, id] = h.split("/");
   if (seg === "projekt") return { page: "projekt" };
+  if (seg === "budget") return { page: "budget" };
   if (seg === "omrade" && id) return { page: "omrade", id };
   if (seg === "rum" && id) return { page: "rum", id };
   return { page: "hem" };
@@ -62,6 +64,7 @@ function AppInner() {
         <a className="brand" href="#/">VILLA SKOGSTORP</a>
         <a className={"navlink" + (route.page === "hem" ? " active" : "")} href="#/">Översikt</a>
         <a className={"navlink" + (route.page === "projekt" ? " active" : "")} href="#/projekt">Projekt</a>
+        <a className={"navlink" + (route.page === "budget" ? " active" : "")} href="#/budget">Budget</a>
         {gateEnabled && (
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             {!canEdit() && <span className="zonechip" title="Skrivskyddad – ange redigeringslösenord för att ändra">Skrivskyddad</span>}
@@ -73,6 +76,7 @@ function AppInner() {
       <div className={"main" + (isRoom ? " noscroll" : "")}>
         {route.page === "hem" && <Overview rooms={roomsApi.rooms} />}
         {route.page === "projekt" && <Project />}
+        {route.page === "budget" && <Budget />}
         {route.page === "omrade" && <Zone zoneId={route.id} roomsApi={roomsApi} />}
         {route.page === "rum" && <Room roomId={route.id} roomsApi={roomsApi} />}
       </div>

@@ -10,8 +10,8 @@ const DEFAULT_PHASES = [
   "Markarbeten", "Rivning", "Grund tillbyggnad / källare", "Tillbyggnad",
   "Renovering befintlig", "Takomläggning befintligt", "Terrass (utomhus)", "Friggebod", "Garage",
 ];
-const CATS = ["Material", "Arbete", "Underentreprenör", "Övrigt"];
-const CAT_SHORT = { "Material": "Material", "Arbete": "Arbete", "Underentreprenör": "UE", "Övrigt": "Övrigt" };
+const CATS = ["Material", "Arbete", "Övrigt"];
+const CAT_SHORT = { "Material": "Material", "Arbete": "Arbete", "Övrigt": "Övrigt" };
 const OVERGRIP = "Övergripande";
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -54,7 +54,7 @@ export default function Budget() {
   const delItem = (id) => setItems(items.filter((x) => x.id !== id));
   const addItem = (preset) => setItems([...items, {
     id: uid(), desc: "", phaseId: phases[0]?.id || "", roomId: "", category: "Material",
-    qty: "", unit: "", estUnit: "", quote: "", actual: "", ...preset,
+    entreprenor: "", qty: "", unit: "", estUnit: "", quote: "", actual: "", ...preset,
   }]);
 
   // ---- totals ----
@@ -73,6 +73,13 @@ export default function Budget() {
   let groups;
   if (groupBy === "category") {
     groups = CATS.map((c) => ({ key: c, label: c, preset: { category: c }, items: items.filter((i) => (i.category || "Övrigt") === c) }));
+  } else if (groupBy === "ent") {
+    const names = [];
+    for (const it of items) { const n = (it.entreprenor || "").trim(); if (n && !names.includes(n)) names.push(n); }
+    names.sort((a, b) => a.localeCompare(b, "sv"));
+    groups = names.map((n) => ({ key: n, label: n, preset: { entreprenor: n }, items: items.filter((i) => (i.entreprenor || "").trim() === n) }));
+    const none = items.filter((i) => !(i.entreprenor || "").trim());
+    if (none.length || !names.length) groups.push({ key: "_none", label: "Ej angiven entreprenör", preset: { entreprenor: "" }, items: none });
   } else if (groupBy === "room") {
     groups = [
       { key: "", label: OVERGRIP, preset: { roomId: "" }, items: items.filter((i) => !i.roomId) },
@@ -106,7 +113,7 @@ export default function Budget() {
   return (
     <div className="page">
       <h1>BUDGET &amp; TIDSPLAN</h1>
-      <p className="sub">Grova uppskattningar i kronologisk ordning — fyll i mängd och á-pris så räknas summan ut. Lägg till offert och faktisk kostnad efter hand; tagga varje post med fas, rum och kategori.</p>
+      <p className="sub">Grova uppskattningar i kronologisk ordning — fyll i mängd och á-pris så räknas summan ut. Lägg till offert och faktisk kostnad efter hand; tagga varje post med fas, rum, kategori och entreprenör (fritext, t.ex. "Pelle snickare").</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
@@ -175,7 +182,7 @@ export default function Budget() {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["room", "Rum"], ["category", "Kategori"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Entreprenör"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>
@@ -190,13 +197,14 @@ export default function Budget() {
               <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)} <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 12 }}>(uppsk. {kr(gEst)})</span></div>
             </div>
             <div style={{ overflowX: "auto", marginTop: 8 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860, fontSize: 12.5 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 980, fontSize: 12.5 }}>
                 <thead>
                   <tr>
                     <th style={th()}>Post</th>
                     {groupBy !== "phase" && <th style={th()}>Fas</th>}
                     {groupBy !== "room" && <th style={th()}>Rum</th>}
                     {groupBy !== "category" && <th style={th()}>Kat.</th>}
+                    {groupBy !== "ent" && <th style={th()}>Entreprenör</th>}
                     <th style={th("right")}>Mängd</th>
                     <th style={th()}>Enhet</th>
                     <th style={th("right")}>Á-pris</th>
@@ -221,9 +229,11 @@ export default function Budget() {
                           {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                         </select>)}</td>}
                       {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[it.category] || it.category) : (
-                        <select value={it.category || "Material"} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={sel}>
+                        <select value={CATS.includes(it.category) ? it.category : (it.category || "Material")} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={sel}>
                           {CATS.map((c) => <option key={c} value={c}>{CAT_SHORT[c]}</option>)}
+                          {it.category && !CATS.includes(it.category) && <option value={it.category}>{it.category}</option>}
                         </select>)}</td>}
+                      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle snickare" onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, minWidth: 120 }} />}</td>}
                       <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 58, textAlign: "right" }} />}</td>
                       <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 56 }} />}</td>
                       <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 78, textAlign: "right" }} />}</td>
@@ -233,7 +243,7 @@ export default function Budget() {
                       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
                     </tr>
                   ))}
-                  {g.items.length === 0 && <tr><td colSpan={11} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
+                  {g.items.length === 0 && <tr><td colSpan={12} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
                 </tbody>
               </table>
             </div>

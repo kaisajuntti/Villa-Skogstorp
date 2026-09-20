@@ -5,7 +5,8 @@ import { canEdit } from "../config.js";
 import VersionHistory from "../components/VersionHistory.jsx";
 
 // Budget lives in its own space record (space:budget) → syncs + versions like the rest.
-// Shape: { phases: [{id,name,start,end}], items: [{id,desc,phaseId,roomId,category,qty,unit,estUnit,quote,actual}] }
+// Shape: { phases: [{id,name,start,end}], items: [{id,desc,phaseId,roomId,category,entreprenor,del,qty,unit,estUnit}] }
+// One value per row: belopp = mängd × á-pris (estUnit), or estUnit as a lump sum when qty is blank.
 const DEFAULT_PHASES = [
   "Markarbeten", "Rivning", "Grund tillbyggnad / källare", "Tillbyggnad",
   "Renovering befintlig", "Takomläggning befintligt", "Terrass (utomhus)", "Friggebod", "Garage",
@@ -21,10 +22,10 @@ const delOrder = (d) => { const i = DELAR.indexOf(d); return i < 0 ? DELAR.lengt
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const parseNum = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
-const hasVal = (v) => v != null && String(v).trim() !== "";
 const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n)) + " kr";
 const est = (it) => { const q = parseNum(it.qty); return q ? q * parseNum(it.estUnit) : parseNum(it.estUnit); };
-const current = (it) => (hasVal(it.actual) ? parseNum(it.actual) : hasVal(it.quote) ? parseNum(it.quote) : est(it));
+// One value per row: what's entered (mängd × á-pris, or á-pris as a lump sum) is what counts.
+const current = (it) => est(it);
 
 const cell = { padding: "4px 6px", fontSize: 12.5 };
 const sel = { ...cell, border: "1.5px solid var(--ink)", borderRadius: 7, background: "#fff", fontFamily: "inherit" };
@@ -59,20 +60,16 @@ export default function Budget() {
   const delItem = (id) => setItems(items.filter((x) => x.id !== id));
   const addItem = (preset) => setItems([...items, {
     id: uid(), desc: "", phaseId: phases[0]?.id || "", roomId: "", category: "Material",
-    entreprenor: "", del: "", qty: "", unit: "", estUnit: "", quote: "", actual: "", ...preset,
+    entreprenor: "", del: "", qty: "", unit: "", estUnit: "", ...preset,
   }]);
 
   // ---- totals ----
-  let sumEst = 0, sumQuote = 0, sumActual = 0, sumCur = 0; const byCat = {}; const byDel = {};
+  let sumCur = 0; const byCat = {}; const byDel = {};
   for (const it of items) {
-    sumEst += est(it);
-    if (hasVal(it.quote)) sumQuote += parseNum(it.quote);
-    if (hasVal(it.actual)) sumActual += parseNum(it.actual);
     const c = current(it); sumCur += c;
     byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + c;
     const d = (it.del || "").trim(); if (d) byDel[d] = (byDel[d] || 0) + c;
   }
-  const dev = sumCur - sumEst;
   const delKeys = Object.keys(byDel).sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
 
   // ---- grouping ----
@@ -151,9 +148,7 @@ export default function Budget() {
       <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 58, textAlign: "right" }} />}</td>
       <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 56 }} />}</td>
       <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 78, textAlign: "right" }} />}</td>
-      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", color: "var(--muted)" }}>{kr(est(it))}</td>
-      <td style={td("right")}>{ro ? (hasVal(it.quote) ? kr(parseNum(it.quote)) : "—") : <input type="text" inputMode="decimal" value={it.quote} placeholder="kr" onChange={(e) => patchItem(it.id, { quote: e.target.value })} style={{ ...cell, width: 82, textAlign: "right" }} />}</td>
-      <td style={td("right")}>{ro ? (hasVal(it.actual) ? kr(parseNum(it.actual)) : "—") : <input type="text" inputMode="decimal" value={it.actual} placeholder="kr" onChange={(e) => patchItem(it.id, { actual: e.target.value })} style={{ ...cell, width: 82, textAlign: "right" }} />}</td>
+      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }}>{kr(est(it))}</td>
       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
     </tr>
   );
@@ -165,7 +160,7 @@ export default function Budget() {
       return (
         <>
           {g.items.map(renderRow)}
-          {g.items.length === 0 && <tr><td colSpan={13} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
+          {g.items.length === 0 && <tr><td colSpan={11} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
         </>
       );
     }
@@ -177,15 +172,14 @@ export default function Budget() {
     });
     return keys.map((k) => {
       const arr = map.get(k);
-      const cEst = arr.reduce((s, it) => s + est(it), 0);
       const cCur = arr.reduce((s, it) => s + current(it), 0);
       return (
         <Fragment key={k || "_none"}>
           <tr>
-            <td colSpan={13} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
+            <td colSpan={11} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 11.5, textTransform: "uppercase", letterSpacing: 0.5 }}>{k || NODEL}</span>
-                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)} <span style={{ color: "var(--muted)" }}>(uppsk. {kr(cEst)})</span></span>
+                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)}</span>
               </div>
             </td>
           </tr>
@@ -198,21 +192,15 @@ export default function Budget() {
   return (
     <div className="page">
       <h1>BUDGET &amp; TIDSPLAN</h1>
-      <p className="sub">Grova uppskattningar i kronologisk ordning — fyll i mängd och á-pris så räknas summan ut. Lägg till offert och faktisk kostnad efter hand; tagga varje post med fas, rum, kategori, entreprenör (fritext, t.ex. "Pelle snickare") och del/byggdel (Golv, Yttervägg, Ytskikt … — grupperas i underrubriker).</p>
+      <p className="sub">Ett belopp per post = mängd × á-pris (eller á-pris som klumpsumma om mängd lämnas tom) — det du skriver in är det som gäller, oavsett gissning eller känt. Arbete skattas i timmar. Tagga varje post med fas, rum, kategori, entreprenör (fritext, t.ex. "Pelle snickare") och del/byggdel (Golv, Yttervägg, Ytskikt … — grupperas i underrubriker). Alla priser ex moms.</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-          <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Gällande total</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Total</div>
           <div className="mono" style={{ fontSize: 26, fontWeight: 700 }}>{kr(sumCur)}</div>
         </div>
-        <div className="row" style={{ marginTop: 8, gap: 18, fontSize: 12.5, color: "var(--muted)" }}>
-          <span>Uppskattat: <span className="mono" style={{ color: "var(--ink)" }}>{kr(sumEst)}</span></span>
-          <span>Offert: <span className="mono" style={{ color: "var(--ink)" }}>{kr(sumQuote)}</span></span>
-          <span>Faktiskt: <span className="mono" style={{ color: "var(--ink)" }}>{kr(sumActual)}</span></span>
-          <span>Avvikelse mot uppskattat: <span className="mono" style={{ color: dev > 0 ? "var(--red)" : "var(--ink)" }}>{dev > 0 ? "+" : ""}{kr(dev)}</span></span>
-        </div>
-        <div className="row" style={{ marginTop: 6, gap: 16, fontSize: 12, color: "var(--muted)" }}>
+        <div className="row" style={{ marginTop: 8, gap: 16, fontSize: 12, color: "var(--muted)" }}>
           {CATS.map((c) => <span key={c}>{CAT_SHORT[c]}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat[c] || 0)}</span></span>)}
         </div>
         {delKeys.length > 0 && (
@@ -282,16 +270,15 @@ export default function Budget() {
       </datalist>
 
       {groups.map((g) => {
-        const gEst = g.items.reduce((s, it) => s + est(it), 0);
         const gCur = g.items.reduce((s, it) => s + current(it), 0);
         return (
           <div key={g.key} className="card" style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 600 }}>{g.label}</div>
-              <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)} <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 12 }}>(uppsk. {kr(gEst)})</span></div>
+              <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)}</div>
             </div>
             <div style={{ overflowX: "auto", marginTop: 8 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1080, fontSize: 12.5 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: 12.5 }}>
                 <thead>
                   <tr>
                     <th style={th()}>Post</th>
@@ -303,9 +290,7 @@ export default function Budget() {
                     <th style={th("right")}>Mängd</th>
                     <th style={th()}>Enhet</th>
                     <th style={th("right")}>Á-pris</th>
-                    <th style={th("right")}>Uppskattat</th>
-                    <th style={th("right")}>Offert</th>
-                    <th style={th("right")}>Faktiskt</th>
+                    <th style={th("right")}>Summa</th>
                     {!ro && <th style={{ width: 26 }}></th>}
                   </tr>
                 </thead>

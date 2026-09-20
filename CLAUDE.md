@@ -122,17 +122,19 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - `#/budget` page, stored in its own space record **`space:budget`** (syncs + versions,
   reuses `useSpace("budget")`). Shape (flat tagged items + dated phases):
   `phases: [{ id, name, start, end }]` (start/end = YYYY-MM-DD),
-  `items: [{ id, desc, phaseId, roomId, category, entreprenor, del, qty, unit, estUnit, quote, actual }]`.
+  `items: [{ id, desc, phaseId, roomId, category, entreprenor, del, qty, unit, estUnit }]`.
   Seeds 9 default phases (Markarbeten → Garage) when empty; `roomId` links to `vs:v1:rooms`
   (""=Övergripande); categories = Material/Arbete/Övrigt (kostnadstyp). `entreprenor` is
   free text — name the actual craftsman ("Pelle snickare", "Jonas målare"), not a fixed list.
   `del` = byggdel/moment, also free text with datalist suggestions (`DELAR`: Golv,
   Golvbeklädnad, Yttervägg, Fasad, Innervägg, Väggbeklädnad, Dränering, Tak, VVS, El, Övrigt).
   Legacy "Underentreprenör" category values are tolerated (shown as an extra select option).
-- Per line: **Uppskattat = qty × estUnit** (qty blank → estUnit is a lump sum);
-  **Offert**/**Faktiskt** are entered amounts; **Gällande** = Faktiskt ›› Offert ›› Uppskattat.
-  Numbers stored as strings, parsed comma/space-tolerant. Summary: Gällande total +
-  Uppskattat/Offert/Faktiskt + avvikelse + per-kategori + per-del (when any del set).
+- **One value per row**: belopp (col "Summa") = `qty × estUnit` (qty blank → estUnit
+  is a lump sum). No offert/faktiskt split — what you enter is what counts. Labour
+  (category Arbete) is estimated in hours: qty = timmar, unit "timmar", estUnit = kr/h
+  (currently 580 ex moms). Material stays quantity × á-pris. All prices ex moms.
+  Numbers stored as strings, parsed comma/space-tolerant. Summary: Total +
+  per-kategori + per-del (when any del set).
 - **Gruppera efter Fas / Del / Rum / Kategori / Entreprenör** (flat items regrouped
   client-side; leftovers land in an "Ej tilldelad"/"(borttagna rum)"/"Ej angiven …" group).
   Each row edits its tags via dropdowns + free-text entreprenör/del inputs.

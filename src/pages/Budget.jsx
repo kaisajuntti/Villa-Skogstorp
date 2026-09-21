@@ -16,7 +16,7 @@ const CAT_SHORT = { "Material": "Material", "Arbete": "Arbete", "Övrigt": "Övr
 const OVERGRIP = "Övergripande";
 // "Del" = byggdel/moment (free text). These are just suggestions in a datalist —
 // you can type anything ("Kök", "Trädäck", …). Used for sub-headers within a group.
-const DELAR = ["Golv", "Dränering", "Yttervägg", "Innervägg", "Trappa", "Fönster", "Dörrar", "Fasad", "Tak", "Golvbeklädnad", "Väggbeklädnad", "VVS", "El", "Övrigt"];
+const DELAR = ["Mark", "Stomme", "Golv", "Dränering", "Yttervägg", "Innervägg", "Trappa", "Fönster", "Dörrar", "Fasad", "Tak", "Golvbeklädnad", "Väggbeklädnad", "VVS", "Ventilation", "El", "Övrigt"];
 const NODEL = "Ej angiven del";
 const delOrder = (d) => { const i = DELAR.indexOf(d); return i < 0 ? DELAR.length : i; };
 

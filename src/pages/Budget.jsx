@@ -26,6 +26,9 @@ const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).f
 const est = (it) => { const q = parseNum(it.qty); return q ? q * parseNum(it.estUnit) : parseNum(it.estUnit); };
 // One value per row: what's entered (mängd × á-pris, or á-pris as a lump sum) is what counts.
 const current = (it) => est(it);
+// Arbetstimmar: labour rows measured in hours (for the time plan).
+const hoursOf = (it) => (it.category === "Arbete" && /tim/i.test(it.unit || "") ? parseNum(it.qty) : 0);
+const hFmt = (h) => (Math.round(h) + " h");
 
 const cell = { padding: "4px 6px", fontSize: 12.5 };
 const sel = { ...cell, border: "1.5px solid var(--ink)", borderRadius: 7, background: "#fff", fontFamily: "inherit" };
@@ -64,13 +67,16 @@ export default function Budget() {
   }]);
 
   // ---- totals ----
-  let sumCur = 0; const byCat = {}; const byDel = {};
+  let sumCur = 0, sumHours = 0; const byCat = {}; const byDel = {}; const byDelH = {};
   for (const it of items) {
     const c = current(it); sumCur += c;
     byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + c;
-    const d = (it.del || "").trim(); if (d) byDel[d] = (byDel[d] || 0) + c;
+    const h = hoursOf(it); sumHours += h;
+    const d = (it.del || "").trim();
+    if (d) { byDel[d] = (byDel[d] || 0) + c; if (h) byDelH[d] = (byDelH[d] || 0) + h; }
   }
   const delKeys = Object.keys(byDel).sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
+  const hourDelKeys = Object.keys(byDelH).sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
 
   // ---- grouping ----
   const phaseIds = new Set(phases.map((p) => p.id));
@@ -173,13 +179,14 @@ export default function Budget() {
     return keys.map((k) => {
       const arr = map.get(k);
       const cCur = arr.reduce((s, it) => s + current(it), 0);
+      const cH = arr.reduce((s, it) => s + hoursOf(it), 0);
       return (
         <Fragment key={k || "_none"}>
           <tr>
             <td colSpan={11} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 11.5, textTransform: "uppercase", letterSpacing: 0.5 }}>{k || NODEL}</span>
-                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)}</span>
+                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)}{cH > 0 && <span style={{ color: "var(--muted)" }}> · {hFmt(cH)}</span>}</span>
               </div>
             </td>
           </tr>
@@ -202,10 +209,19 @@ export default function Budget() {
         </div>
         <div className="row" style={{ marginTop: 8, gap: 16, fontSize: 12, color: "var(--muted)" }}>
           {CATS.map((c) => <span key={c}>{CAT_SHORT[c]}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat[c] || 0)}</span></span>)}
+          <span>Arbete: <span className="mono" style={{ color: "var(--ink)" }}>{hFmt(sumHours)}</span> (~{Math.round(sumHours / 8)} dagar)</span>
         </div>
         {delKeys.length > 0 && (
           <div className="row" style={{ marginTop: 6, gap: 16, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
             {delKeys.map((d) => <span key={d}>{d}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byDel[d])}</span></span>)}
+          </div>
+        )}
+        {hourDelKeys.length > 0 && (
+          <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
+            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted)", marginBottom: 4 }}>Arbetstimmar per del (tidsplan)</div>
+            <div className="row" style={{ gap: 16, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
+              {hourDelKeys.map((d) => <span key={d}>{d}: <span className="mono" style={{ color: "var(--ink)" }}>{hFmt(byDelH[d])}</span></span>)}
+            </div>
           </div>
         )}
       </div>
@@ -271,11 +287,12 @@ export default function Budget() {
 
       {groups.map((g) => {
         const gCur = g.items.reduce((s, it) => s + current(it), 0);
+        const gH = g.items.reduce((s, it) => s + hoursOf(it), 0);
         return (
           <div key={g.key} className="card" style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 600 }}>{g.label}</div>
-              <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)}</div>
+              <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)}{gH > 0 && <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 12 }}> · {hFmt(gH)}</span>}</div>
             </div>
             <div style={{ overflowX: "auto", marginTop: 8 }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: 12.5 }}>

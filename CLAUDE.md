@@ -134,7 +134,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   (category Arbete) is estimated in hours: qty = timmar, unit "timmar", estUnit = kr/h
   (currently 580 ex moms). Material stays quantity × á-pris. All prices ex moms.
   Numbers stored as strings, parsed comma/space-tolerant. Summary: Total +
-  per-kategori + per-del (when any del set).
+  per-kategori + per-del + **arbetstimmar per del** (sum of Arbete rows in "timmar",
+  for the time plan). Hours (`hoursOf`) also shown next to kr in every group header
+  and del sub-header.
 - **Gruppera efter Fas / Del / Rum / Kategori / Entreprenör** (flat items regrouped
   client-side; leftovers land in an "Ej tilldelad"/"(borttagna rum)"/"Ej angiven …" group).
   Each row edits its tags via dropdowns + free-text entreprenör/del inputs.

@@ -67,16 +67,23 @@ export default function Budget() {
   }]);
 
   // ---- totals ----
-  let sumCur = 0, sumHours = 0; const byCat = {}; const byDel = {}; const byDelH = {};
+  // Cost split by building: Garage=p8, Friggebod=p7, Terrass=p6, else Huvudbostad.
+  const buildOf = (pid) => (pid === "p8" ? "Garage" : pid === "p7" ? "Friggebod" : pid === "p6" ? "Terrass" : "Huvudbostad");
+  let sumCur = 0, sumHours = 0; const byCat = {}; const byDel = {}; const byDelH = {}; const byBuild = {};
   for (const it of items) {
     const c = current(it); sumCur += c;
     byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + c;
+    byBuild[buildOf(it.phaseId)] = (byBuild[buildOf(it.phaseId)] || 0) + c;
     const h = hoursOf(it); sumHours += h;
     const d = (it.del || "").trim();
     if (d) { byDel[d] = (byDel[d] || 0) + c; if (h) byDelH[d] = (byDelH[d] || 0) + h; }
   }
   const delKeys = Object.keys(byDel).sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
   const hourDelKeys = Object.keys(byDelH).sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
+  // per-phase cost + labour hours (for the time plan)
+  const phaseCost = {}; const phaseHrs = {};
+  for (const it of items) { phaseCost[it.phaseId] = (phaseCost[it.phaseId] || 0) + current(it); phaseHrs[it.phaseId] = (phaseHrs[it.phaseId] || 0) + hoursOf(it); }
+  const BUILDS = ["Huvudbostad", "Garage", "Friggebod", "Terrass"];
 
   // ---- grouping ----
   const phaseIds = new Set(phases.map((p) => p.id));
@@ -197,7 +204,7 @@ export default function Budget() {
   };
 
   return (
-    <div className="page">
+    <div className="page wide">
       <h1>BUDGET &amp; TIDSPLAN</h1>
       <p className="sub">Ett belopp per post = mängd × á-pris (eller á-pris som klumpsumma om mängd lämnas tom) — det du skriver in är det som gäller, oavsett gissning eller känt. Arbete skattas i timmar. Tagga varje post med fas, rum, kategori, entreprenör (fritext, t.ex. "Pelle snickare") och del/byggdel (Golv, Yttervägg, Ytskikt … — grupperas i underrubriker). Alla priser ex moms.</p>
 
@@ -207,23 +214,16 @@ export default function Budget() {
           <div style={{ fontSize: 12, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>Total</div>
           <div className="mono" style={{ fontSize: 26, fontWeight: 700 }}>{kr(sumCur)}</div>
         </div>
-        <div className="row" style={{ marginTop: 8, gap: 16, fontSize: 12, color: "var(--muted)" }}>
-          {CATS.map((c) => <span key={c}>{CAT_SHORT[c]}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat[c] || 0)}</span></span>)}
-          <span>Arbete: <span className="mono" style={{ color: "var(--ink)" }}>{hFmt(sumHours)}</span> (~{Math.round(sumHours / 8)} dagar)</span>
+        <div className="row" style={{ marginTop: 8, gap: 18, fontSize: 12.5, color: "var(--muted)" }}>
+          <span>Material: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Material"] || 0)}</span></span>
+          <span>Arbete: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Arbete"] || 0)}</span></span>
+          {byCat["Övrigt"] ? <span>Övrigt: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Övrigt"])}</span></span> : null}
         </div>
-        {delKeys.length > 0 && (
-          <div className="row" style={{ marginTop: 6, gap: 16, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
-            {delKeys.map((d) => <span key={d}>{d}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byDel[d])}</span></span>)}
-          </div>
-        )}
-        {hourDelKeys.length > 0 && (
-          <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
-            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.6, color: "var(--muted)", marginBottom: 4 }}>Arbetstimmar per del (tidsplan)</div>
-            <div className="row" style={{ gap: 16, fontSize: 12, color: "var(--muted)", flexWrap: "wrap" }}>
-              {hourDelKeys.map((d) => <span key={d}>{d}: <span className="mono" style={{ color: "var(--ink)" }}>{hFmt(byDelH[d])}</span></span>)}
-            </div>
-          </div>
-        )}
+        <div className="row" style={{ marginTop: 6, gap: 18, fontSize: 12.5, color: "var(--muted)", flexWrap: "wrap" }}>
+          {BUILDS.filter((buildName) => byBuild[buildName]).map((buildName) => (
+            <span key={buildName}>{buildName}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byBuild[buildName])}</span></span>
+          ))}
+        </div>
       </div>
 
       {/* phases + timeline */}
@@ -234,6 +234,9 @@ export default function Budget() {
             <span className="mono" style={{ color: "var(--muted)", width: 16 }}>{i + 1}</span>
             {ro ? <div style={{ flex: "1 1 180px", fontWeight: 600 }}>{p.name}</div>
               : <input type="text" value={p.name} onChange={(e) => patchPhase(p.id, { name: e.target.value })} style={{ flex: "1 1 180px", fontWeight: 600 }} />}
+            <span className="mono" style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", minWidth: 150, textAlign: "right" }}>
+              {kr(phaseCost[p.id] || 0)}{phaseHrs[p.id] ? " · " + hFmt(phaseHrs[p.id]) : ""}
+            </span>
             {ro ? <span className="sub" style={{ margin: 0 }}>{p.start || "?"} – {p.end || "?"}</span> : (
               <>
                 <input type="date" value={p.start || ""} onChange={(e) => patchPhase(p.id, { start: e.target.value })} style={sel} />
@@ -246,6 +249,12 @@ export default function Budget() {
             )}
           </div>
         ))}
+        <div className="row" style={{ gap: 16, marginTop: 6, paddingTop: 8, borderTop: "1px solid var(--line)", fontSize: 12.5, fontWeight: 600, flexWrap: "wrap" }}>
+          <span>Totalt:</span>
+          <span className="mono">{kr(sumCur)}</span>
+          <span className="mono">{hFmt(sumHours)} arbete</span>
+          <span style={{ fontWeight: 400, color: "var(--muted)" }}>≈ {Math.ceil(sumHours / 105)} veckor (3 pers × 35 h/v) · ~{Math.round(sumHours / 21)} arbetsdagar</span>
+        </div>
         {!ro && <button className="btn small" style={{ marginTop: 4 }} onClick={addPhase}>+ Fas</button>}
 
         {dated.length > 0 && (

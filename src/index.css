@@ -34,6 +34,7 @@ a:hover { text-decoration: underline; }
 .main { flex: 1; min-height: 0; overflow: auto; }
 .main.noscroll { overflow: hidden; display: flex; flex-direction: column; }
 .page { max-width: 980px; margin: 0 auto; padding: 20px 18px 60px; }
+.page.wide { max-width: 1400px; padding-left: 10px; padding-right: 10px; }
 
 h1 { font-size: 22px; letter-spacing: 1.5px; font-weight: 600; margin: 6px 0 4px; }
 h2 { font-size: 15px; letter-spacing: 1.5px; font-weight: 600; text-transform: uppercase; margin: 28px 0 10px; }

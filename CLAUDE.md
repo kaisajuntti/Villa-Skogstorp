@@ -139,6 +139,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   next to kr in every group header and del sub-header. Budget page uses `className="page wide"`
   (wider layout, `.page.wide` in index.css). **Faser & tidsplan**: each phase shows its
   kostnad + arbetstimmar; a total row shows kr + h + ~veckor (105 h/v = 3 pers × 35 h).
+- **Material totalt**-vy (groupBy "material"): aggregates all category=Material rows by
+  (desc + unit) across every room/phase into one table (Total mängd + Summa), sorted by kr.
+  Composite rows (e.g. "Yttervägg: regel + isolering + gips") sum as a whole (rows are not split).
 - **Gruppera efter Fas / Del / Rum / Kategori / Entreprenör** (flat items regrouped
   client-side; leftovers land in an "Ej tilldelad"/"(borttagna rum)"/"Ej angiven …" group).
   Each row edits its tags via dropdowns + free-text entreprenör/del inputs.

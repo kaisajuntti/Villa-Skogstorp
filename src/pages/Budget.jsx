@@ -285,7 +285,7 @@ export default function Budget() {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Entreprenör"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Entreprenör"], ["material", "Material totalt"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>
@@ -294,7 +294,50 @@ export default function Budget() {
         {DELAR.map((d) => <option key={d} value={d} />)}
       </datalist>
 
-      {groups.map((g) => {
+      {groupBy === "material" && (() => {
+        // Aggregate all Material rows by (desc + unit) across every room/phase.
+        const agg = {};
+        for (const it of items) {
+          if (it.category !== "Material") continue;
+          const key = (it.desc || "—").trim() + " | " + (it.unit || "");
+          if (!agg[key]) agg[key] = { desc: (it.desc || "—").trim(), unit: it.unit || "", qty: 0, sum: 0 };
+          agg[key].qty += parseNum(it.qty); agg[key].sum += current(it);
+        }
+        const rowsA = Object.values(agg).sort((a, b) => b.sum - a.sum);
+        const matTot = rowsA.reduce((s, r) => s + r.sum, 0);
+        return (
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 600 }}>Material totalt (över alla rum &amp; faser)</div>
+              <div className="mono" style={{ fontWeight: 700 }}>{kr(matTot)}</div>
+            </div>
+            <div style={{ overflowX: "auto", marginTop: 8 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 520, fontSize: 12.5 }}>
+                <thead><tr>
+                  <th style={th()}>Material</th>
+                  <th style={th("right")}>Total mängd</th>
+                  <th style={th()}>Enhet</th>
+                  <th style={th("right")}>Summa</th>
+                </tr></thead>
+                <tbody>
+                  {rowsA.map((r, i) => (
+                    <tr key={i} style={{ borderTop: "1px solid var(--line)" }}>
+                      <td style={td()}>{r.desc}</td>
+                      <td style={{ ...td("right"), fontFamily: "var(--mono)" }}>{r.qty ? new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 1 }).format(r.qty) : "—"}</td>
+                      <td style={td()}>{r.unit}</td>
+                      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap" }}>{kr(r.sum)}</td>
+                    </tr>
+                  ))}
+                  {rowsA.length === 0 && <tr><td colSpan={4} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga materialrader.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <p className="sub" style={{ margin: "8px 0 0" }}>Lika materialrader (samma benämning + enhet) summeras oavsett rum/fas. Kompositrader (t.ex. "Yttervägg: regel + isolering + gips") summeras som helhet.</p>
+          </div>
+        );
+      })()}
+
+      {groupBy !== "material" && groups.map((g) => {
         const gCur = g.items.reduce((s, it) => s + current(it), 0);
         const gH = g.items.reduce((s, it) => s + hoursOf(it), 0);
         return (

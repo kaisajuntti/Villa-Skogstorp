@@ -135,8 +135,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   (category Arbete) is estimated in hours: qty = timmar, unit "timmar", estUnit = kr/h
   (currently 580 ex moms). Material stays quantity × á-pris. All prices ex moms.
   Numbers stored as strings, parsed comma/space-tolerant. Summary (top card): Total +
-  Material/Arbete (kr) + **byggnad-split** (Huvudbostad/Garage/Friggebod/Terrass, bucketed
-  by phase: p8=Garage, p7=Friggebod, p6=Terrass, else Huvudbostad). Hours (`hoursOf`) shown
+  Material/Arbete (kr) + **byggnad-split** (Huvudbostad/Garage/Friggebod/Terrass/Trädgård,
+  bucketed by phase *name*). Hours (`hoursOf`) shown
   next to kr in every group header and del sub-header. Budget page uses `className="page wide"`
   (wider layout, `.page.wide` in index.css). **Faser & tidsplan**: each phase shows its
   kostnad + arbetstimmar; a total row shows kr + h + ~veckor (105 h/v = 3 pers × 35 h).
@@ -156,6 +156,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   trädgård + gårdsplan (200 m² smågatsten), Fokus 2 grund garage/friggebod (okt 2027, före tjäle),
   friggebod + garage (jan 2028, **papptak**). Byggnad-split now derives from the phase *name*
   (Garage/Friggebod/Terrass/Trädgård|Gårdsplan, else Huvudbostad), not hardcoded phase ids.
+- **Etapp 1 tidsplan (2026-10)**: Mark ∥ Rivning (4 pers, 28 h/d) → Grund ∥ Bergvärme → Stomme
+  (tillbyggnad tätt med råspont+papp, papp mot befintlig papp — ingen plåt på vintern) →
+  Installationer → Inredning & ytskikt → Renovering befintlig → Målning inv → Inredning →
+  **pUTV Utvändigt vår** (april: all plåt, pappdelen av befintligt tak, skorsten, puts, balkonger) →
+  pov slutstäd/slutbesked → **INFLYTT** → pMALUT fasadmålning + snickarglädje (efter inflytt).
+  Röda dagar 2027 (6/1, 26/3, 29/3, 6/5, 25/6) räknas bort. Garage/friggebod/terrass flyttade till etapp 2;
+  rivning av friggebod + carport ligger kvar i etapp 1. Matjord bakom tillbyggnaden läggs i etapp 1
+  (maskin når inte dit efteråt).
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)

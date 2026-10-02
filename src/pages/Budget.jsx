@@ -4,7 +4,8 @@ import { spaceKey } from "../storage.js";
 import { canEdit } from "../config.js";
 import VersionHistory from "../components/VersionHistory.jsx";
 
-// Budget lives in its own space record (space:budget) → syncs + versions like the rest.
+// Budget lives in its own space record → syncs + versions like the rest.
+// Etapp 1 (huset, fram till inflytt) = space:budget · Etapp 2 (efter inflytt) = space:budget2.
 // Shape: { phases: [{id,name,start,end}], items: [{id,desc,phaseId,roomId,category,entreprenor,del,qty,unit,estUnit}] }
 // One value per row: belopp = mängd × á-pris (estUnit), or estUnit as a lump sum when qty is blank.
 const DEFAULT_PHASES = [
@@ -35,9 +36,14 @@ const sel = { ...cell, border: "1.5px solid var(--ink)", borderRadius: 7, backgr
 const th = (align = "left") => ({ padding: "4px 6px", fontWeight: 600, whiteSpace: "nowrap", textAlign: align, fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--muted)" });
 const td = (align = "left") => ({ padding: "3px 4px", verticalAlign: "middle", textAlign: align });
 
-export default function Budget() {
+const ETAPPER = [
+  { id: "budget", href: "#/budget", label: "Etapp 1 – huset (till inflytt)" },
+  { id: "budget2", href: "#/budget/etapp2", label: "Etapp 2 – efter inflytt" },
+];
+
+export default function Budget({ id = "budget" }) {
   const ro = !canEdit();
-  const [space, update] = useSpace("budget");
+  const [space, update] = useSpace(id);
   const { rooms } = useRooms();
   const [groupBy, setGroupBy] = useState("phase");
 
@@ -67,8 +73,13 @@ export default function Budget() {
   }]);
 
   // ---- totals ----
-  // Cost split by building: Garage=p8, Friggebod=p7, Terrass=p6, else Huvudbostad.
-  const buildOf = (pid) => (pid === "p8" ? "Garage" : pid === "p7" ? "Friggebod" : pid === "p6" ? "Terrass" : "Huvudbostad");
+  // Cost split by building, from the phase name (Garage / Friggebod / Terrass / Trädgård+gårdsplan, else Huvudbostad).
+  const phaseName = (pid) => phases.find((p) => p.id === pid)?.name || "";
+  const buildOf = (pid) => {
+    const n = phaseName(pid);
+    return /garage/i.test(n) ? "Garage" : /friggebod/i.test(n) ? "Friggebod" : /terrass/i.test(n) ? "Terrass"
+      : /trädgård|gårdsplan/i.test(n) ? "Trädgård" : "Huvudbostad";
+  };
   let sumCur = 0, sumHours = 0; const byCat = {}; const byDel = {}; const byDelH = {}; const byBuild = {};
   for (const it of items) {
     const c = current(it); sumCur += c;
@@ -83,7 +94,7 @@ export default function Budget() {
   // per-phase cost + labour hours (for the time plan)
   const phaseCost = {}; const phaseHrs = {};
   for (const it of items) { phaseCost[it.phaseId] = (phaseCost[it.phaseId] || 0) + current(it); phaseHrs[it.phaseId] = (phaseHrs[it.phaseId] || 0) + hoursOf(it); }
-  const BUILDS = ["Huvudbostad", "Garage", "Friggebod", "Terrass"];
+  const BUILDS = ["Huvudbostad", "Garage", "Friggebod", "Terrass", "Trädgård"];
 
   // ---- grouping ----
   const phaseIds = new Set(phases.map((p) => p.id));
@@ -206,6 +217,11 @@ export default function Budget() {
   return (
     <div className="page wide">
       <h1>BUDGET &amp; TIDSPLAN</h1>
+      <div className="row" style={{ gap: 8, marginBottom: 10 }}>
+        {ETAPPER.map((e) => (
+          <a key={e.id} href={e.href} className={"btn small" + (e.id === id ? " primary" : "")}>{e.label}</a>
+        ))}
+      </div>
       <p className="sub">Ett belopp per post = mängd × á-pris (eller á-pris som klumpsumma om mängd lämnas tom) — det du skriver in är det som gäller, oavsett gissning eller känt. Arbete skattas i timmar. Tagga varje post med fas, rum, kategori, entreprenör (fritext, t.ex. "Pelle snickare") och del/byggdel (Golv, Yttervägg, Ytskikt … — grupperas i underrubriker). Alla priser ex moms.</p>
 
       {/* summary */}
@@ -373,7 +389,7 @@ export default function Budget() {
         );
       })}
 
-      <VersionHistory storageKey={spaceKey("budget")} />
+      <VersionHistory storageKey={spaceKey(id)} />
     </div>
   );
 }

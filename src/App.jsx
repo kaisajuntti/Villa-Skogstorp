@@ -9,12 +9,12 @@ import Zone from "./pages/Zone.jsx";
 import Room from "./pages/Room.jsx";
 import Lock from "./pages/Lock.jsx";
 
-// Tiny hash router: #/ · #/projekt · #/omrade/<id> · #/rum/<id>
+// Tiny hash router: #/ · #/projekt · #/budget[/etapp2] · #/omrade/<id> · #/rum/<id>
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   const [seg, id] = h.split("/");
   if (seg === "projekt") return { page: "projekt" };
-  if (seg === "budget") return { page: "budget" };
+  if (seg === "budget") return { page: "budget", id: id === "etapp2" ? "budget2" : "budget" };
   if (seg === "omrade" && id) return { page: "omrade", id };
   if (seg === "rum" && id) return { page: "rum", id };
   return { page: "hem" };
@@ -76,7 +76,7 @@ function AppInner() {
       <div className={"main" + (isRoom ? " noscroll" : "")}>
         {route.page === "hem" && <Overview rooms={roomsApi.rooms} />}
         {route.page === "projekt" && <Project />}
-        {route.page === "budget" && <Budget />}
+        {route.page === "budget" && <Budget key={route.id} id={route.id} />}
         {route.page === "omrade" && <Zone zoneId={route.id} roomsApi={roomsApi} />}
         {route.page === "rum" && <Room roomId={route.id} roomsApi={roomsApi} />}
       </div>

@@ -38,7 +38,8 @@ Live URL: `https://kaisajuntti.github.io/Villa-Skogstorp/`.
 ```
 #/                  Översikt — clickable situationsplan snippet + zone legend
 #/projekt           Project-level: dokument, färgschema, anteckningar, export/import
-#/budget            Budget & tidsplan — phased cost estimate (Excel-like)
+#/budget            Budget & tidsplan — Etapp 1 (huset, till inflytt), space:budget
+#/budget/etapp2     Budget & tidsplan — Etapp 2 (efter inflytt), space:budget2
 #/omrade/<zoneId>   Zone: description + room list (add/rename/delete rooms)
 #/rum/<roomId>      Room: tabs Planritning · Färger · Dokument · Anteckningar
 ```
@@ -150,6 +151,11 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   per-del subtotal — via `renderBody`/`renderRow`. No del values anywhere → flat table.
 - **Tidslinje**: date-based Gantt from phase start/end (month ticks). Phases: rename, set
   start/end dates, reorder (↑/↓), add/remove. Read-only respects `canEdit()`.
+- **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
+  top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +
+  trädgård + gårdsplan (200 m² smågatsten), Fokus 2 grund garage/friggebod (okt 2027, före tjäle),
+  friggebod + garage (jan 2028, **papptak**). Byggnad-split now derives from the phase *name*
+  (Garage/Friggebod/Terrass/Trädgård|Gårdsplan, else Huvudbostad), not hardcoded phase ids.
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)

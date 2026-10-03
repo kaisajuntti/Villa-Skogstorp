@@ -25,13 +25,25 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 const parseNum = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n)) + " kr";
 const est = (it) => { const q = parseNum(it.qty); return q ? q * parseNum(it.estUnit) : parseNum(it.estUnit); };
-// One value per row: what's entered (mängd × á-pris, or á-pris as a lump sum) is what counts.
-const current = (it) => est(it);
-// Arbetstimmar: labour rows measured in hours (for the time plan).
-const hoursOf = (it) => (it.category === "Arbete" && /tim/i.test(it.unit || "") ? parseNum(it.qty) : 0);
+// Legacy labour rows (category Arbete, unit "timmar", á-pris = kr/h) count as Snickare hours.
+const legacyH = (it) => (it.category === "Arbete" && /tim/i.test(it.unit || "") ? parseNum(it.qty) : 0);
 const hFmt = (h) => (Math.round(h) + " h");
+// Yrken: timpris + bemanning (antal personer). Stored on the record as `rates`.
+const DEFAULT_RATES = [
+  { typ: "Snickare", rate: "580", crew: "3" },
+  { typ: "Maskinist", rate: "1000", crew: "1" },
+  { typ: "Elektriker", rate: "625", crew: "1" },
+  { typ: "VVS", rate: "625", crew: "1" },
+];
+const LEGACY_TYP = "Snickare";
+// Working days: Mon–Fri, skipping jullov 22 Dec – 4 Jan.
+const isWork = (d) => { const w = d.getDay(), m = d.getMonth(), day = d.getDate(); return w > 0 && w < 6 && !((m === 11 && day >= 22) || (m === 0 && day <= 4)); };
+const addWorkdays = (start, n) => { const d = new Date(start); while (!isWork(d)) d.setDate(d.getDate() + 1); for (let i = 1; i < n; i++) { d.setDate(d.getDate() + 1); while (!isWork(d)) d.setDate(d.getDate() + 1); } return d; };
+const TYP_COLORS = ["#5A7A8C", "#8C6A3F", "#5E8C5A", "#9a4a3a", "#7A5A8C", "#3F7F8C", "#8C8C3F"];
 
 const cell = { padding: "4px 6px", fontSize: 12.5 };
+const OKLART_BG = "#FBF3E4";
+const OKLART_TAG = { display: "inline-block", fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, color: "#9a4a3a", border: "1px solid #9a4a3a", borderRadius: 4, padding: "0 4px", marginBottom: 3 };
 
 // Description cell: a textarea that wraps long text and grows to fit it (instead of a
 // one-line input that cuts the text off). Enter doesn't add line breaks.
@@ -50,12 +62,35 @@ function AutoText({ value, onChange, placeholder }) {
     <textarea ref={ref} rows={1} value={value} placeholder={placeholder}
       onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
       onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-      style={{ ...cell, minWidth: 260, width: "100%", minHeight: 0, resize: "none", overflow: "hidden", lineHeight: 1.35, display: "block" }} />
+      style={{ ...cell, minWidth: 185, width: "100%", minHeight: 0, resize: "none", overflow: "hidden", lineHeight: 1.35, display: "block" }} />
   );
 }
 const sel = { ...cell, border: "1.5px solid var(--ink)", borderRadius: 7, background: "#fff", fontFamily: "inherit" };
 const th = (align = "left") => ({ padding: "4px 6px", fontWeight: 600, whiteSpace: "nowrap", textAlign: align, fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--muted)" });
 const td = (align = "left") => ({ padding: "3px 4px", verticalAlign: "middle", textAlign: align });
+
+// Arbete per rad: flera yrken, var och ett med timmar.
+function WorkCell({ work, typs, ro, onChange }) {
+  const list = work || [];
+  if (ro) return <span style={{ whiteSpace: "nowrap" }}>{list.length ? list.map((w) => w.typ + " " + (w.h || 0) + " h").join(" · ") : "—"}</span>;
+  const set = (i, p) => onChange(list.map((w, j) => (j === i ? { ...w, ...p } : w)));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 140 }}>
+      {list.map((w, i) => (
+        <div key={i} style={{ display: "flex", gap: 3, alignItems: "center" }}>
+          <select value={w.typ} onChange={(e) => set(i, { typ: e.target.value })} style={{ ...sel, padding: "3px 2px", maxWidth: 86 }}>
+            {typs.map((t) => <option key={t} value={t}>{t}</option>)}
+            {!typs.includes(w.typ) && <option value={w.typ}>{w.typ}</option>}
+          </select>
+          <input type="text" inputMode="decimal" value={w.h ?? ""} onChange={(e) => set(i, { h: e.target.value })} style={{ ...cell, width: 40, textAlign: "right", padding: "3px 4px" }} />
+          <span style={{ color: "var(--muted)", fontSize: 11 }}>h</span>
+          <button className="btn small" style={{ padding: "0 5px", border: "none" }} title="Ta bort" onClick={() => onChange(list.filter((_, j) => j !== i))}>✕</button>
+        </div>
+      ))}
+      <button className="btn small" style={{ padding: "1px 6px", alignSelf: "flex-start", fontSize: 11 }} onClick={() => onChange([...list, { typ: typs[0] || "Snickare", h: "" }])}>+ yrke</button>
+    </div>
+  );
+}
 
 const ETAPPER = [
   { id: "budget", href: "#/budget", label: "Etapp 1 – huset (till inflytt)" },
@@ -78,6 +113,21 @@ export default function Budget({ id = "budget" }) {
   if (!space) return <div className="page"><p className="sub">Laddar …</p></div>;
 
   const items = space.items || [];
+  const rates = space.rates && space.rates.length ? space.rates : DEFAULT_RATES;
+  const typs = rates.map((r) => r.typ);
+  const rateOf = (typ) => parseNum(rates.find((r) => r.typ === typ)?.rate);
+  const crewOf = (typ) => Math.max(1, parseNum(rates.find((r) => r.typ === typ)?.crew) || 1);
+  const setRates = (next) => update({ rates: next });
+  // Per row: material/UE part (mängd × á-pris) + arbete (yrke × timmar × timpris).
+  const workOf = (it) => (Array.isArray(it.work) ? it.work : []);
+  const laborCost = (it) => workOf(it).reduce((s, w) => s + parseNum(w.h) * rateOf(w.typ), 0);
+  const current = (it) => est(it) + laborCost(it);
+  const hoursOf = (it) => legacyH(it) + workOf(it).reduce((s, w) => s + parseNum(w.h), 0);
+  const hoursByTyp = (it) => {
+    const o = {}; const lh = legacyH(it); if (lh) o[LEGACY_TYP] = lh;
+    for (const w of workOf(it)) { const h = parseNum(w.h); if (h) o[w.typ] = (o[w.typ] || 0) + h; }
+    return o;
+  };
   const roomName = (id) => (rooms || []).find((r) => r.id === id)?.name || (id ? "(borttaget rum)" : OVERGRIP);
 
   const setPhases = (next) => update({ phases: next });
@@ -90,7 +140,7 @@ export default function Budget({ id = "budget" }) {
   const delItem = (id) => setItems(items.filter((x) => x.id !== id));
   const addItem = (preset) => setItems([...items, {
     id: uid(), desc: "", phaseId: phases[0]?.id || "", roomId: "", category: "Material",
-    entreprenor: "", del: "", qty: "", unit: "", estUnit: "", ...preset,
+    entreprenor: "Pelle", del: "", qty: "", unit: "", estUnit: "", work: [], ...preset,
   }]);
 
   // ---- totals ----
@@ -101,10 +151,13 @@ export default function Budget({ id = "budget" }) {
     return /garage/i.test(n) ? "Garage" : /friggebod/i.test(n) ? "Friggebod" : /terrass/i.test(n) ? "Terrass"
       : /trädgård|gårdsplan/i.test(n) ? "Trädgård" : "Huvudbostad";
   };
-  let sumCur = 0, sumHours = 0; const byCat = {}; const byDel = {}; const byDelH = {}; const byBuild = {};
+  let sumCur = 0, sumHours = 0, sumOklart = 0; const byCat = {}; const byDel = {}; const byDelH = {}; const byBuild = {}; const byTypH = {};
   for (const it of items) {
     const c = current(it); sumCur += c;
-    byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + c;
+    if (it.oklart) sumOklart += c;
+    byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + est(it);
+    if (laborCost(it)) byCat["Arbete"] = (byCat["Arbete"] || 0) + laborCost(it);
+    for (const [t, h] of Object.entries(hoursByTyp(it))) byTypH[t] = (byTypH[t] || 0) + h;
     byBuild[buildOf(it.phaseId)] = (byBuild[buildOf(it.phaseId)] || 0) + c;
     const h = hoursOf(it); sumHours += h;
     const d = (it.del || "").trim();
@@ -135,7 +188,7 @@ export default function Budget({ id = "budget" }) {
     names.sort((a, b) => a.localeCompare(b, "sv"));
     groups = names.map((n) => ({ key: n, label: n, preset: { entreprenor: n }, items: items.filter((i) => (i.entreprenor || "").trim() === n) }));
     const none = items.filter((i) => !(i.entreprenor || "").trim());
-    if (none.length || !names.length) groups.push({ key: "_none", label: "Ej angiven entreprenör", preset: { entreprenor: "" }, items: none });
+    if (none.length || !names.length) groups.push({ key: "_none", label: "Ej angiven ansvarig", preset: { entreprenor: "" }, items: none });
   } else if (groupBy === "room") {
     groups = [
       { key: "", label: OVERGRIP, preset: { roomId: "" }, items: items.filter((i) => !i.roomId) },
@@ -150,10 +203,25 @@ export default function Budget({ id = "budget" }) {
     if (orphan.length) groups.push({ key: "_o", label: "Ej tilldelad fas", preset: {}, items: orphan });
   }
 
-  // ---- gantt range ----
+  // ---- gantt: per yrke + leveranser ----
   const dated = phases.filter((p) => p.start && p.end);
-  const minT = dated.length ? Math.min(...dated.map((p) => +new Date(p.start))) : 0;
-  const maxT = dated.length ? Math.max(...dated.map((p) => +new Date(p.end))) : 0;
+  // Each yrke works in a phase from its start for ceil(h / (bemanning × 7)) working days.
+  // A bar that runs past the phase end (red) means that yrke is the bottleneck.
+  const typSegs = {};
+  for (const p of dated) {
+    const ph = {};
+    for (const it of items) if (it.phaseId === p.id) for (const [t, h] of Object.entries(hoursByTyp(it))) ph[t] = (ph[t] || 0) + h;
+    for (const [t, h] of Object.entries(ph)) {
+      const days = Math.ceil(h / (crewOf(t) * 7));
+      const end = addWorkdays(p.start + "T00:00:00", days);
+      (typSegs[t] = typSegs[t] || []).push({ phase: p, h, days, start: +new Date(p.start + "T00:00:00"), end: +end, over: +end > +new Date(p.end + "T23:59:59") });
+    }
+  }
+  const typRows = [...typs.filter((t) => typSegs[t]), ...Object.keys(typSegs).filter((t) => !typs.includes(t))];
+  const deliveries = items.filter((it) => it.leverans).map((it) => ({ t: +new Date(it.leverans + "T00:00:00"), it })).sort((a, b) => a.t - b.t);
+  const allT = [...dated.flatMap((p) => [+new Date(p.start), +new Date(p.end)]), ...Object.values(typSegs).flat().map((x) => x.end), ...deliveries.map((d) => d.t)];
+  const minT = allT.length ? Math.min(...allT) : 0;
+  const maxT = allT.length ? Math.max(...allT) : 0;
   const span = maxT - minT || 1;
   const ticks = [];
   if (dated.length) {
@@ -166,10 +234,15 @@ export default function Budget({ id = "budget" }) {
   }
   const LABELW = 140;
 
+  const NCOLS = 14 - ["phase", "del", "room", "category", "ent"].filter((k) => k === groupBy).length - (ro ? 1 : 0);
+
   // One item row — shared by the flat and the del-clustered rendering.
   const renderRow = (it) => (
-    <tr key={it.id} style={{ borderTop: "1px solid var(--line)" }}>
-      <td style={{ ...td(), minWidth: 260, whiteSpace: "normal" }}>{ro ? (it.desc || "—") : <AutoText value={it.desc} placeholder="Beskrivning" onChange={(v) => patchItem(it.id, { desc: v })} />}</td>
+    <tr key={it.id} style={{ borderTop: "1px solid var(--line)", background: it.oklart ? OKLART_BG : undefined }}>
+      <td style={{ ...td(), minWidth: 185, whiteSpace: "normal" }}>
+        {it.oklart && <span style={OKLART_TAG}>OKLART</span>}
+        {ro ? (it.desc || "—") : <AutoText value={it.desc} placeholder="Beskrivning" onChange={(v) => patchItem(it.id, { desc: v })} />}
+      </td>
       {groupBy !== "phase" && <td style={td()}>{ro ? (phases.find((p) => p.id === it.phaseId)?.name || "—") : (
         <select value={it.phaseId || ""} onChange={(e) => patchItem(it.id, { phaseId: e.target.value })} style={sel}>
           <option value="">—</option>
@@ -177,23 +250,26 @@ export default function Budget({ id = "budget" }) {
         </select>)}</td>}
       {groupBy !== "del" && <td style={td()}>{ro ? (it.del || "—") : (
         <>
-          <input type="text" list="budget-delar" value={it.del || ""} placeholder="t.ex. Golv" title={it.del || ""} onChange={(e) => patchItem(it.id, { del: e.target.value })} style={{ ...cell, minWidth: 110 }} />
+          <input type="text" list="budget-delar" value={it.del || ""} placeholder="t.ex. Golv" title={it.del || ""} onChange={(e) => patchItem(it.id, { del: e.target.value })} style={{ ...cell, width: 72 }} />
         </>)}</td>}
       {groupBy !== "room" && <td style={td()}>{ro ? roomName(it.roomId) : (
-        <select value={it.roomId || ""} onChange={(e) => patchItem(it.id, { roomId: e.target.value })} style={sel}>
+        <select value={it.roomId || ""} onChange={(e) => patchItem(it.id, { roomId: e.target.value })} style={{ ...sel, maxWidth: 92 }}>
           <option value="">{OVERGRIP}</option>
           {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>)}</td>}
       {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[it.category] || it.category) : (
-        <select value={CATS.includes(it.category) ? it.category : (it.category || "Material")} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={sel}>
+        <select value={CATS.includes(it.category) ? it.category : (it.category || "Material")} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={{ ...sel, maxWidth: 84 }}>
           {CATS.map((c) => <option key={c} value={c}>{CAT_SHORT[c]}</option>)}
           {it.category && !CATS.includes(it.category) && <option value={it.category}>{it.category}</option>}
         </select>)}</td>}
-      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle snickare" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, minWidth: 120 }} />}</td>}
-      <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 58, textAlign: "right" }} />}</td>
-      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 56 }} />}</td>
-      <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 78, textAlign: "right" }} />}</td>
-      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }}>{kr(est(it))}</td>
+      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, width: 76 }} />}</td>}
+      <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 50, textAlign: "right" }} />}</td>
+      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 48 }} />}</td>
+      <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}</td>
+      <td style={td()}><WorkCell work={it.work} typs={typs} ro={ro} onChange={(w) => patchItem(it.id, { work: w })} /></td>
+      <td style={td()}>{ro ? (it.leverans || "—") : <input type="date" value={it.leverans || ""} title="Leveransdatum (material)" onChange={(e) => patchItem(it.id, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 98, fontSize: 11 }} />}</td>
+      <td style={{ ...td("center"), padding: "3px 2px" }}>{ro ? (it.oklart ? "✓" : "") : <input type="checkbox" checked={!!it.oklart} title="Oklart om posten behövs" onChange={(e) => patchItem(it.id, { oklart: e.target.checked })} />}</td>
+      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={laborCost(it) ? "Material/UE " + kr(est(it)) + " + arbete " + kr(laborCost(it)) : undefined}>{kr(current(it))}</td>
       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
     </tr>
   );
@@ -205,24 +281,31 @@ export default function Budget({ id = "budget" }) {
       return (
         <>
           {g.items.map(renderRow)}
-          {g.items.length === 0 && <tr><td colSpan={11} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
+          {g.items.length === 0 && <tr><td colSpan={NCOLS} style={{ ...td(), color: "var(--muted)", fontStyle: "italic" }}>Inga poster.</td></tr>}
         </>
       );
     }
-    const map = new Map();
-    for (const it of g.items) { const d = (it.del || "").trim(); if (!map.has(d)) map.set(d, []); map.get(d).push(it); }
-    const keys = [...map.keys()].sort((a, b) => {
-      if (a === "") return 1; if (b === "") return -1;
-      return (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv");
-    });
-    return keys.map((k) => {
-      const arr = map.get(k);
+    // Per fas: behåll radernas ordning (kronologisk) – ny underrubrik varje gång del byter.
+    // Övriga vyer: klustra per del i DELAR-ordning.
+    let runs;
+    if (groupBy === "phase") {
+      runs = [];
+      for (const it of g.items) { const d = (it.del || "").trim(); const last = runs[runs.length - 1]; if (last && last.k === d) last.arr.push(it); else runs.push({ k: d, arr: [it] }); }
+    } else {
+      const map = new Map();
+      for (const it of g.items) { const d = (it.del || "").trim(); if (!map.has(d)) map.set(d, []); map.get(d).push(it); }
+      runs = [...map.keys()].sort((a, b) => {
+        if (a === "") return 1; if (b === "") return -1;
+        return (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv");
+      }).map((k) => ({ k, arr: map.get(k) }));
+    }
+    return runs.map(({ k, arr }, ri) => {
       const cCur = arr.reduce((s, it) => s + current(it), 0);
       const cH = arr.reduce((s, it) => s + hoursOf(it), 0);
       return (
-        <Fragment key={k || "_none"}>
+        <Fragment key={ri + ":" + (k || "_none")}>
           <tr>
-            <td colSpan={11} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
+            <td colSpan={NCOLS} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 11.5, textTransform: "uppercase", letterSpacing: 0.5 }}>{k || NODEL}</span>
                 <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)}{cH > 0 && <span style={{ color: "var(--muted)" }}> · {hFmt(cH)}</span>}</span>
@@ -243,7 +326,7 @@ export default function Budget({ id = "budget" }) {
           <a key={e.id} href={e.href} className={"btn small" + (e.id === id ? " primary" : "")}>{e.label}</a>
         ))}
       </div>
-      <p className="sub">Ett belopp per post = mängd × á-pris (eller á-pris som klumpsumma om mängd lämnas tom) — det du skriver in är det som gäller, oavsett gissning eller känt. Arbete skattas i timmar. Tagga varje post med fas, rum, kategori, entreprenör (fritext, t.ex. "Pelle snickare") och del/byggdel (Golv, Yttervägg, Ytskikt … — grupperas i underrubriker). Alla priser ex moms.</p>
+      <p className="sub">Varje post = material/UE (mängd × á-pris, eller á-pris som klumpsumma om mängd lämnas tom) + arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Leveransdatum på material visas i tidslinjen. Alla priser ex moms.</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
@@ -256,11 +339,40 @@ export default function Budget({ id = "budget" }) {
           <span>Arbete: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Arbete"] || 0)}</span></span>
           {byCat["Övrigt"] ? <span>Övrigt: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Övrigt"])}</span></span> : null}
         </div>
+        {sumOklart !== 0 && (
+          <div style={{ marginTop: 6, fontSize: 12.5, color: "#9a4a3a" }}>varav oklart: <span className="mono">{kr(sumOklart)}</span></div>
+        )}
+        <div className="row" style={{ marginTop: 6, gap: 18, fontSize: 12.5, color: "var(--muted)", flexWrap: "wrap" }}>
+          {Object.entries(byTypH).map(([t, h]) => (
+            <span key={t}>{t}: <span className="mono" style={{ color: "var(--ink)" }}>{hFmt(h)}</span></span>
+          ))}
+        </div>
         <div className="row" style={{ marginTop: 6, gap: 18, fontSize: 12.5, color: "var(--muted)", flexWrap: "wrap" }}>
           {BUILDS.filter((buildName) => byBuild[buildName]).map((buildName) => (
             <span key={buildName}>{buildName}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byBuild[buildName])}</span></span>
           ))}
         </div>
+      </div>
+
+      {/* yrken: timpris + bemanning */}
+      <h2>Yrken – timpris &amp; bemanning</h2>
+      <div className="card" style={{ marginBottom: 18 }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 12.5 }}>
+          <thead><tr><th style={th()}>Yrke</th><th style={th("right")}>kr/h</th><th style={th("right")}>Personer</th><th style={th("right")}>Timmar</th>{!ro && <th></th>}</tr></thead>
+          <tbody>
+            {rates.map((r, i) => (
+              <tr key={i} style={{ borderTop: "1px solid var(--line)" }}>
+                <td style={td()}>{ro ? r.typ : <input type="text" value={r.typ} onChange={(e) => setRates(rates.map((x, j) => (j === i ? { ...x, typ: e.target.value } : x)))} style={{ ...cell, width: 120 }} />}</td>
+                <td style={td("right")}>{ro ? r.rate : <input type="text" inputMode="decimal" value={r.rate} onChange={(e) => setRates(rates.map((x, j) => (j === i ? { ...x, rate: e.target.value } : x)))} style={{ ...cell, width: 64, textAlign: "right" }} />}</td>
+                <td style={td("right")}>{ro ? r.crew : <input type="text" inputMode="decimal" value={r.crew} onChange={(e) => setRates(rates.map((x, j) => (j === i ? { ...x, crew: e.target.value } : x)))} style={{ ...cell, width: 44, textAlign: "right" }} />}</td>
+                <td style={{ ...td("right"), fontFamily: "var(--mono)" }}>{hFmt(byTypH[r.typ] || 0)}</td>
+                {!ro && <td style={td()}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => setRates(rates.filter((_, j) => j !== i))}>✕</button></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!ro && <button className="btn small" style={{ marginTop: 6 }} onClick={() => setRates([...rates, { typ: "Nytt yrke", rate: "", crew: "1" }])}>+ Yrke</button>}
+        <p className="sub" style={{ margin: "8px 0 0" }}>Gamla arbetsrader (kategori Arbete, enhet timmar) räknas som {LEGACY_TYP}. Arbetsdag = 7 h per person.</p>
       </div>
 
       {/* phases + timeline */}
@@ -313,7 +425,45 @@ export default function Budget({ id = "budget" }) {
                   </div>
                 );
               })}
+              {typRows.length > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 6, borderTop: "1px dashed var(--line)" }}>
+                  <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.5, color: "var(--muted)", marginBottom: 2 }}>Per yrke</div>
+                  {typRows.map((t, k) => (
+                    <div key={t} style={{ display: "flex", alignItems: "center", height: 22 }}>
+                      <div style={{ width: LABELW, fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 6 }}>{t} <span style={{ color: "var(--muted)" }}>({crewOf(t)})</span></div>
+                      <div style={{ position: "relative", flex: 1, height: 12, background: "var(--line)", borderRadius: 4 }}>
+                        {typSegs[t].map((sg, j) => (
+                          <div key={j} title={t + " · " + sg.phase.name + ": " + Math.round(sg.h) + " h ≈ " + sg.days + " dagar" + (sg.over ? " – längre än fasen!" : "")}
+                            style={{ position: "absolute", left: ((sg.start - minT) / span) * 100 + "%", width: Math.max(0.6, ((sg.end - sg.start) / span) * 100) + "%", height: "100%", background: sg.over ? "#9a4a3a" : TYP_COLORS[k % TYP_COLORS.length], borderRadius: 3, opacity: 0.9, borderRight: "1px solid #fff" }} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {deliveries.length > 0 && (
+                <div style={{ display: "flex", alignItems: "center", height: 22, marginTop: 4 }}>
+                  <div style={{ width: LABELW, fontSize: 11.5, paddingRight: 6 }}>Leveranser</div>
+                  <div style={{ position: "relative", flex: 1, height: 14 }}>
+                    {deliveries.map((d, j) => (
+                      <div key={j} title={d.it.leverans + ": " + d.it.desc} style={{ position: "absolute", left: ((d.t - minT) / span) * 100 + "%", top: 1, width: 10, height: 10, background: "var(--ink)", transform: "translateX(-5px) rotate(45deg)" }} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
+        )}
+        {deliveries.length > 0 && (
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Leveranser</div>
+            {deliveries.map((d, j) => (
+              <div key={j} style={{ display: "flex", gap: 10, borderTop: "1px solid var(--line)", padding: "3px 0" }}>
+                <span className="mono" style={{ whiteSpace: "nowrap" }}>{d.it.leverans}</span>
+                <span>{d.it.desc}</span>
+                <span style={{ marginLeft: "auto", color: "var(--muted)", whiteSpace: "nowrap" }}>{phaseName(d.it.phaseId)}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -322,7 +472,7 @@ export default function Budget({ id = "budget" }) {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Entreprenör"], ["material", "Material totalt"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>
@@ -338,7 +488,7 @@ export default function Budget({ id = "budget" }) {
           if (it.category !== "Material") continue;
           const key = (it.desc || "—").trim() + " | " + (it.unit || "");
           if (!agg[key]) agg[key] = { desc: (it.desc || "—").trim(), unit: it.unit || "", qty: 0, sum: 0 };
-          agg[key].qty += parseNum(it.qty); agg[key].sum += current(it);
+          agg[key].qty += parseNum(it.qty); agg[key].sum += est(it);
         }
         const rowsA = Object.values(agg).sort((a, b) => b.sum - a.sum);
         const matTot = rowsA.reduce((s, r) => s + r.sum, 0);
@@ -384,7 +534,7 @@ export default function Budget({ id = "budget" }) {
               <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)}{gH > 0 && <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 12 }}> · {hFmt(gH)}</span>}</div>
             </div>
             <div style={{ overflowX: "auto", marginTop: 8 }}>
-              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900, fontSize: 12.5 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1080, fontSize: 12.5 }}>
                 <thead>
                   <tr>
                     <th style={th()}>Post</th>
@@ -392,10 +542,13 @@ export default function Budget({ id = "budget" }) {
                     {groupBy !== "del" && <th style={th()}>Del</th>}
                     {groupBy !== "room" && <th style={th()}>Rum</th>}
                     {groupBy !== "category" && <th style={th()}>Kat.</th>}
-                    {groupBy !== "ent" && <th style={th()}>Entreprenör</th>}
+                    {groupBy !== "ent" && <th style={th()}>Ansvarig</th>}
                     <th style={th("right")}>Mängd</th>
                     <th style={th()}>Enhet</th>
                     <th style={th("right")}>Á-pris</th>
+                    <th style={th()}>Arbete</th>
+                    <th style={th()}>Leverans</th>
+                    <th style={{ ...th("center"), padding: "4px 2px" }} title="Oklart om posten behövs">?</th>
                     <th style={th("right")}>Summa</th>
                     {!ro && <th style={{ width: 26 }}></th>}
                   </tr>

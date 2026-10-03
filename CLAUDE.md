@@ -151,6 +151,17 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   per-del subtotal — via `renderBody`/`renderRow`. No del values anywhere → flat table.
 - **Tidslinje**: date-based Gantt from phase start/end (month ticks). Phases: rename, set
   start/end dates, reorder (↑/↓), add/remove. Read-only respects `canEdit()`.
+- **Yrken, ansvarig, oklart, leverans (2026-10)**: record field `rates: [{typ, rate, crew}]`
+  (default Snickare 580/3 pers, Maskinist 1000/1 inkl. maskin, Elektriker 625/1, VVS 625/1; editable
+  in "Yrken – timpris & bemanning"). Per item: `work: [{typ, h}]` (several yrken per row),
+  `entreprenor` = **Ansvarig** (UI label; default "Pelle" = snickare/totalentreprenör), `oklart: bool`
+  (badge + "varav oklart" in summary), `leverans: YYYY-MM-DD` (diamond in Gantt + Leveranser list).
+  Row sum = material/UE (`qty × estUnit` or lump) + Σ h × rate. Legacy rows (category Arbete, unit
+  timmar) still work and count as **Snickare** hours. Gantt has a "Per yrke" section: each yrke works
+  from phase start for ceil(h / (crew × 7)) workdays; red bar = longer than the phase (bottleneck).
+  Phase view keeps row order (chronological) — del sub-header starts a new run when del changes.
+  Mark is split: **p0 Markarbeten 1 – före grund** and **pMARK2 Markarbeten 2 – efter grund**
+  (parallel with Stomme). Phase dates are computed (scripts) as max over yrken of ceil(h/(crew×7)).
 - **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
   top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +
   trädgård + gårdsplan (200 m² smågatsten), Fokus 2 grund garage/friggebod (okt 2027, före tjäle),

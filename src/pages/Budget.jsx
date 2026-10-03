@@ -310,24 +310,22 @@ export default function Budget({ id = "budget" }) {
           {phases.map((p, i) => <option key={p.id} value={p.id}>{i + 1}. {p.name}</option>)}
         </select>)}</td>}
       {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, width: 80 }} />}</td>}
-      {matLines(it) ? (
-        <td colSpan={3} style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>
-          <button className="btn small" style={{ padding: "2px 8px", fontSize: 12 }} onClick={() => setOpenMat({ ...openMat, [it.id]: !openMat[it.id] })}>
+      <td colSpan={3} style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>
+        {matLines(it) || est(it) ? (
+          <button className="btn small" style={{ padding: "2px 8px", fontSize: 12, textAlign: "right" }} onClick={() => {
+            if (!ro && !matLines(it)) patchItem(it.id, { mat: [{ desc: "", qty: it.qty || "", unit: it.unit || "", price: it.estUnit || "" }], qty: "", unit: "", estUnit: "" });
+            setOpenMat({ ...openMat, [it.id]: !openMat[it.id] });
+          }}>
             <span className="mono" style={{ fontWeight: 600 }}>{kr(est(it))}</span>
-            <span style={{ color: "var(--muted)", marginLeft: 6 }}>{openMat[it.id] ? "▾" : "▸"} {matLines(it).length} rader</span>
+            <span style={{ color: "var(--muted)", marginLeft: 6 }}>{openMat[it.id] ? "▾" : "▸"} {(matLines(it) || [1]).length} {(matLines(it) || [1]).length === 1 ? "rad" : "rader"}</span>
+            {(() => { const m = matLines(it); const l = m && m.length === 1 ? m[0] : (!m ? { qty: it.qty, unit: it.unit, price: it.estUnit } : null);
+              return l && parseNum(l.qty) && !(parseNum(l.qty) === 1 && /^(post|st)?$/i.test((l.unit || "").trim())) ? <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{l.qty} {l.unit} × {l.price}</div> : null; })()}
           </button>
-        </td>
-      ) : (
-        <>
-          <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 48, textAlign: "right" }} />}</td>
-          <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 46 }} />}</td>
-          <td style={td("right")}>
-            {ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}
-            {!ro && <div><button className="btn small" title="Dela upp materialet på flera rader" style={{ padding: "0 5px", fontSize: 10.5, border: "none", color: "var(--muted)" }}
-              onClick={() => { patchItem(it.id, { mat: [{ desc: "", qty: it.qty || "", unit: it.unit || "", price: it.estUnit || "", leverans: it.leverans || "" }], qty: "", unit: "", estUnit: "" }); setOpenMat({ ...openMat, [it.id]: true }); }}>+ specificera</button></div>}
-          </td>
-        </>
-      )}
+        ) : (!ro && (
+          <button className="btn small" style={{ padding: "1px 8px", fontSize: 11, color: "var(--muted)" }}
+            onClick={() => { patchItem(it.id, { mat: [{ desc: "", qty: "", unit: "", price: "" }] }); setOpenMat({ ...openMat, [it.id]: true }); }}>+ material</button>
+        ))}
+      </td>
       <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? (
         <>{it.ext ? kr(extOf(it)) : "—"}{it.extNote && <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "normal", maxWidth: 110 }}>{it.extNote}</div>}</>
       ) : (
@@ -623,7 +621,7 @@ export default function Budget({ id = "budget" }) {
                     <th style={th()}>Post</th>
                     {groupBy !== "phase" && <th style={th()}>Fas</th>}
                     {groupBy !== "ent" && <th style={th()}>Ansvarig</th>}
-                    <th colSpan={3} style={{ ...th("center"), borderLeft: "1px solid var(--line)" }} title="Det ni köper: mängd × á-pris (eller á-pris som klumpsumma)">Material <span style={{ fontWeight: 400, textTransform: "none" }}>(mängd · enhet · á-pris)</span></th>
+                    <th colSpan={3} style={{ ...th("center"), borderLeft: "1px solid var(--line)" }} title="Det ni köper: mängd × á-pris (eller á-pris som klumpsumma)">Material</th>
                     <th style={{ ...th("right"), borderLeft: "1px solid var(--line)" }} title="UE/tjänst – någon annan gör det eller tar betalt, fast pris">Extern</th>
                     <th style={{ ...th(), borderLeft: "1px solid var(--line)" }} title="Egna hantverkare: yrke × timmar">Arbete</th>
                     <th style={{ ...th(), whiteSpace: "normal", lineHeight: 1.15 }}>Material&shy;leverans</th>

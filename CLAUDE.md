@@ -162,6 +162,11 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Phase view keeps row order (chronological) — del sub-header starts a new run when del changes.
   Mark is split: **p0 Markarbeten 1 – före grund** and **pMARK2 Markarbeten 2 – efter grund**
   (parallel with Stomme). Phase dates are computed (scripts) as max over yrken of ceil(h/(crew×7)).
+  **Kostnadstyp (2026-10)**: `category` now only classifies the row's amount (qty × estUnit):
+  `Material` | `UE/tjänst` (bought from an external party at a fixed price: kommun, åkeri, plåtslagare,
+  borrfirma, FTX, El/VVS lumps …) | `""` (row is pure arbete). Arbete is never a category — it is
+  `work` × rates. All legacy Arbete-timmar rows were migrated to `work:[{typ:"Snickare",h}]`;
+  legacy "Övrigt" → UE/tjänst (UI also maps it). Summary: Material · UE/tjänster · Arbete.
   **7 h/dag/person is deliberate slack** (vs 8 h ≈ 10 %) — don't add a separate buffer on top.
 - **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
   top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +

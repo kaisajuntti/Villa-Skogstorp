@@ -12,8 +12,11 @@ const DEFAULT_PHASES = [
   "Markarbeten", "Rivning", "Grund tillbyggnad / källare", "Tillbyggnad",
   "Renovering befintlig", "Takomläggning befintligt", "Terrass (utomhus)", "Friggebod", "Garage",
 ];
-const CATS = ["Material", "Arbete", "Övrigt"];
-const CAT_SHORT = { "Material": "Material", "Arbete": "Arbete", "Övrigt": "Övrigt" };
+// Kostnadstyp for the row's amount (mängd × á-pris). Arbete is not a category any more —
+// it is computed from the row's yrken × timmar × timpris.
+const CATS = ["Material", "UE/tjänst"];
+const CAT_SHORT = { "Material": "Material", "UE/tjänst": "UE/tjänst", "": "—" };
+const catOf = (it) => (it.category === "Övrigt" ? "UE/tjänst" : it.category || "");
 const OVERGRIP = "Övergripande";
 // "Del" = byggdel/moment (free text). These are just suggestions in a datalist —
 // you can type anything ("Kök", "Trädäck", …). Used for sub-headers within a group.
@@ -164,7 +167,9 @@ export default function Budget({ id = "budget" }) {
   for (const it of items) {
     const c = current(it); sumCur += c;
     if (it.oklart) sumOklart += c;
-    byCat[it.category || "Övrigt"] = (byCat[it.category || "Övrigt"] || 0) + est(it);
+    // legacy Arbete rows (timmar × 580) count as Arbete; otherwise the amount goes to its kostnadstyp
+    const ck = legacyH(it) ? "Arbete" : (catOf(it) || "Material");
+    byCat[ck] = (byCat[ck] || 0) + est(it);
     if (laborCost(it)) byCat["Arbete"] = (byCat["Arbete"] || 0) + laborCost(it);
     for (const [t, h] of Object.entries(hoursByTyp(it))) byTypH[t] = (byTypH[t] || 0) + h;
     byBuild[buildOf(it.phaseId)] = (byBuild[buildOf(it.phaseId)] || 0) + c;
@@ -183,7 +188,11 @@ export default function Budget({ id = "budget" }) {
   const phaseIds = new Set(phases.map((p) => p.id));
   let groups;
   if (groupBy === "category") {
-    groups = CATS.map((c) => ({ key: c, label: c, preset: { category: c }, items: items.filter((i) => (i.category || "Övrigt") === c) }));
+    groups = CATS.map((c) => ({ key: c, label: c, preset: { category: c }, items: items.filter((i) => catOf(i) === c && est(i) !== 0) }));
+    const onlyWork = items.filter((i) => est(i) === 0);
+    if (onlyWork.length) groups.push({ key: "_w", label: "Endast arbete (inget material/UE)", preset: { category: "" }, items: onlyWork });
+    const other = items.filter((i) => est(i) !== 0 && !CATS.includes(catOf(i)));
+    if (other.length) groups.push({ key: "_o", label: "Övrigt", preset: {}, items: other });
   } else if (groupBy === "del") {
     const names = [];
     for (const it of items) { const n = (it.del || "").trim(); if (n && !names.includes(n)) names.push(n); }
@@ -266,10 +275,11 @@ export default function Budget({ id = "budget" }) {
           <option value="">{OVERGRIP}</option>
           {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </select>)}</td>}
-      {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[it.category] || it.category) : (
-        <select value={CATS.includes(it.category) ? it.category : (it.category || "Material")} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={{ ...sel, maxWidth: 84 }}>
+      {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[catOf(it)] ?? catOf(it)) : (
+        <select value={catOf(it)} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={{ ...sel, maxWidth: 84 }}>
+          <option value="">—</option>
           {CATS.map((c) => <option key={c} value={c}>{CAT_SHORT[c]}</option>)}
-          {it.category && !CATS.includes(it.category) && <option value={it.category}>{it.category}</option>}
+          {catOf(it) && !CATS.includes(catOf(it)) && <option value={catOf(it)}>{catOf(it)}</option>}
         </select>)}</td>}
       {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, width: 76 }} />}</td>}
       <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 50, textAlign: "right" }} />}</td>
@@ -335,7 +345,7 @@ export default function Budget({ id = "budget" }) {
           <a key={e.id} href={e.href} className={"btn small" + (e.id === id ? " primary" : "")}>{e.label}</a>
         ))}
       </div>
-      <p className="sub">Varje post = material/UE (mängd × á-pris, eller á-pris som klumpsumma om mängd lämnas tom) + arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Alla priser ex moms.</p>
+      <p className="sub">Varje post = belopp (mängd × á-pris, eller á-pris som klumpsumma om mängd lämnas tom) med typ Material eller UE/tjänst (köpt av extern part) + arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Alla priser ex moms.</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
@@ -345,8 +355,11 @@ export default function Budget({ id = "budget" }) {
         </div>
         <div className="row" style={{ marginTop: 8, gap: 18, fontSize: 12.5, color: "var(--muted)" }}>
           <span>Material: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Material"] || 0)}</span></span>
-          <span>Arbete: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Arbete"] || 0)}</span></span>
-          {byCat["Övrigt"] ? <span>Övrigt: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Övrigt"])}</span></span> : null}
+          <span>UE/tjänster: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["UE/tjänst"] || 0)}</span></span>
+          <span>Arbete (egna hantverkare): <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Arbete"] || 0)}</span></span>
+          {Object.keys(byCat).filter((k) => !["Material", "UE/tjänst", "Arbete"].includes(k) && byCat[k]).map((k) => (
+            <span key={k}>{k}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat[k])}</span></span>
+          ))}
         </div>
         {sumOklart !== 0 && (
           <div style={{ marginTop: 6, fontSize: 12.5, color: "#9a4a3a" }}>varav oklart: <span className="mono">{kr(sumOklart)}</span></div>
@@ -481,7 +494,7 @@ export default function Budget({ id = "budget" }) {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kategori"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kostnadstyp"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>
@@ -560,7 +573,7 @@ export default function Budget({ id = "budget" }) {
                     {groupBy !== "phase" && <th style={th()}>Fas</th>}
                     {groupBy !== "del" && <th style={th()}>Del</th>}
                     {groupBy !== "room" && <th style={th()}>Rum</th>}
-                    {groupBy !== "category" && <th style={th()}>Kat.</th>}
+                    {groupBy !== "category" && <th style={th()} title="Kostnadstyp för beloppet (mängd × á-pris)">Typ</th>}
                     {groupBy !== "ent" && <th style={th()}>Ansvarig</th>}
                     <th style={th("right")}>Mängd</th>
                     <th style={th()}>Enhet</th>

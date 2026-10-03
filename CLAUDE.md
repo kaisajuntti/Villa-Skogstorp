@@ -211,7 +211,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - Murstocken rivs från taket ner till bjälklaget på plan 1 (krypgrund under). Tegel och gråsten sparas på tomten.
 - Befintligt tak: hälften plåt, hälften papp; tillbyggnaden ansluter mot **pappdelen**.
 - Gamla krypgrunden är uteluftsventilerad (otät stenfot) – **ska inte tätas**; bjälklaget ovanför ska vara tätt.
-- **Prisbas: material = Beijer inköp + 7 %, allt exkl. moms.** Snickare 580 kr/h (rör ej). **Materialstandard: alltid BRA grejer**
+- **Prisbas: byggmaterial = Beijer inköp (specialpris) + 7 %, allt exkl. moms.** Plåt, el-, VVS-material och
+  bergvärmepump köps **via respektive hantverkare** (deras grossistpris) – inte via Beijer. Snickare 580 kr/h (rör ej). **Materialstandard: alltid BRA grejer**
   (beställarens princip) – men räknat på Beijer-inköp. **Plattor/granitkeramik köps mycket billigt** (~200 kr/m² för plattan).
 - Ansvariga: **Pelle** = snickare/totalentreprenör (default). **Linus** = fönster och dörrar.
 - Fönster/dörrar från **Snickarglädje** (snickargladje.com, prislistor exkl. moms) – **25 % rabatt**.

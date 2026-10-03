@@ -220,6 +220,10 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Tilluft via fönsterventiler (beställs med fönstren) + uteluftsdon bakom radiatorer i sovrummen. Inget don i gymmet,
   ingen extern kaminluft (för nu). Ingen murstock/fundament i källaren – prefab lättskorsten. Ritningar:
   `public/plans/ventilation/*.jpg`, länkade i Projekt → Dokument.
+- **El (beslutat 2026-10)**: elcentral i **städ plan 1** (tillbyggnaden), kablar ner till teknikrummet via S1 (ingen
+  undercentral). Smart belysning = **Plejd** (trådlösa dimrar i vanliga dosor, även i befintligt hus) – grovinstallationen
+  ska ha **nolla till alla brytardosor + djupa dosor**. Med i budget: nätverk CAT6, sammankopplade brandvarnare, utebelysning.
+  Plattsättning/tätskikt = eget yrke **Plattsättare** (600 kr/h, certifierad våtrum).
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)
 

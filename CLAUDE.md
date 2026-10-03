@@ -175,6 +175,10 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   without material show "+ material". Line `leverans` dates feed the Gantt/Materialleveranser.
   **El and VVS are own yrken (hours × 625 + material), not Extern** — Extern is only for truly bought-in
   services (kommun, åkeri, plåtslagare, borrfirma, konstruktör …).
+  **pRIVF "Rivning invändigt + murstock – löpande"** (2026-10): background phase from 15 Oct to the day
+  before Renovering befintlig; done when time allows and **excluded from the critical-path chain**
+  (p0∥p1 → Grund → Stomme …). p1 = only what must go day 1 (friggebod in the way of schakt, carport,
+  källartrappa). Goal: **tätt hus på tillbyggnaden före jul** (Stomme ends ~17 Dec).
   **7 h/dag/person is deliberate slack** (vs 8 h ≈ 10 %) — don't add a separate buffer on top.
 - **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
   top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +

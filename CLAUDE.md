@@ -164,7 +164,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   (parallel with Stomme). Phase dates are computed (scripts) as max over yrken of ceil(h/(crew×7)).
   **Row = Material + Extern + Arbete (2026-10)**: Material = `qty × estUnit` (or estUnit as lump) —
   what you buy; **Extern** = `ext` (string kr) — UE/tjänst at a fixed price (kommun, åkeri, plåtslagare,
-  borrfirma, El/VVS lumps …); **Arbete** = `work` × rates. No category column any more (`category`
+  borrfirma, El/VVS lumps …) + `extNote` (short "vad/vem" text shown under the amount); **Arbete** = `work` × rates. No category column any more (`category`
   removed from data; migrated UE/tjänst amounts → `ext`). Del + Rum are shown as small tags under the
   description (empty del highlighted) instead of columns. Summary: Material · Extern · Arbete.
   **7 h/dag/person is deliberate slack** (vs 8 h ≈ 10 %) — don't add a separate buffer on top.

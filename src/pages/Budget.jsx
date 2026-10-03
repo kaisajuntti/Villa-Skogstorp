@@ -49,7 +49,7 @@ const OKLART_TAG = { display: "inline-block", fontSize: 9.5, fontWeight: 700, le
 
 // Description cell: a textarea that wraps long text and grows to fit it (instead of a
 // one-line input that cuts the text off). Enter doesn't add line breaks.
-function AutoText({ value, onChange, placeholder }) {
+function AutoText({ value, onChange, placeholder, style, title }) {
   const ref = useRef(null);
   const fit = () => { const el = ref.current; if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + 2 + "px"; };
   useLayoutEffect(fit, [value]);
@@ -61,10 +61,10 @@ function AutoText({ value, onChange, placeholder }) {
     return () => ro.disconnect();
   }, []);
   return (
-    <textarea ref={ref} rows={1} value={value} placeholder={placeholder}
+    <textarea ref={ref} rows={1} value={value} placeholder={placeholder} title={title}
       onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
       onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
-      style={{ ...cell, minWidth: 185, width: "100%", minHeight: 0, resize: "none", overflow: "hidden", lineHeight: 1.35, display: "block" }} />
+      style={{ ...cell, minWidth: 180, width: "100%", minHeight: 0, resize: "none", overflow: "hidden", lineHeight: 1.35, display: "block", ...style }} />
   );
 }
 const sel = { ...cell, border: "1.5px solid var(--ink)", borderRadius: 7, background: "#fff", fontFamily: "inherit" };
@@ -251,7 +251,7 @@ export default function Budget({ id = "budget" }) {
   // One item row — shared by the flat and the del-clustered rendering.
   const renderRow = (it) => (
     <tr key={it.id} style={{ borderTop: "1px solid var(--line)", background: it.oklart ? OKLART_BG : undefined }}>
-      <td style={{ ...td(), minWidth: 200, whiteSpace: "normal" }}>
+      <td style={{ ...td(), minWidth: 180, whiteSpace: "normal" }}>
         {it.oklart && <span style={OKLART_TAG}>OKLART</span>}
         {ro ? (it.desc || "—") : <AutoText value={it.desc} placeholder="Beskrivning" onChange={(v) => patchItem(it.id, { desc: v })} />}
         <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 3, fontSize: 11 }}>
@@ -277,11 +277,18 @@ export default function Budget({ id = "budget" }) {
       <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 48, textAlign: "right" }} />}</td>
       <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 46 }} />}</td>
       <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}</td>
-      <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? (it.ext ? kr(extOf(it)) : "—") : <input type="text" inputMode="decimal" value={it.ext || ""} placeholder="kr" title="Extern: UE/tjänst, fast pris" onChange={(e) => patchItem(it.id, { ext: e.target.value })} style={{ ...cell, width: 70, textAlign: "right" }} />}</td>
+      <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? (
+        <>{it.ext ? kr(extOf(it)) : "—"}{it.extNote && <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "normal", maxWidth: 110 }}>{it.extNote}</div>}</>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
+          <input type="text" inputMode="decimal" value={it.ext || ""} placeholder="kr" title="Extern: UE/tjänst, fast pris" onChange={(e) => patchItem(it.id, { ext: e.target.value })} style={{ ...cell, width: 90, textAlign: "right" }} />
+          {(it.ext || it.extNote) && <AutoText value={it.extNote || ""} placeholder="vad/vem?" title="Vad är det externa? (t.ex. Kommunen, Åkeri + deponi)" onChange={(v) => patchItem(it.id, { extNote: v })} style={{ ...TAG, minWidth: 0, width: 90, borderRadius: 8, lineHeight: 1.25, ...(it.extNote ? {} : TAG_EMPTY) }} />}
+        </div>
+      )}</td>
       <td style={{ ...td(), borderLeft: "1px solid var(--line)" }}><WorkCell work={it.work} typs={typs} ro={ro} onChange={(w) => patchItem(it.id, { work: w })} /></td>
       <td style={td()}>{ro ? (it.leverans || "—") : <input type="date" value={it.leverans || ""} title="Datum för materialleverans (extern leverans)" onChange={(e) => patchItem(it.id, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 98, fontSize: 11 }} />}</td>
       <td style={{ ...td("center"), padding: "3px 2px" }}>{ro ? (it.oklart ? "✓" : "") : <input type="checkbox" checked={!!it.oklart} title="Oklart om posten behövs" onChange={(e) => patchItem(it.id, { oklart: e.target.checked })} />}</td>
-      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={"Material " + kr(est(it)) + " + extern " + kr(extOf(it)) + " + arbete " + kr(laborCost(it))}>{kr(current(it))}</td>
+      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={"Material " + kr(est(it)) + " + extern " + kr(extOf(it)) + (it.extNote ? " (" + it.extNote + ")" : "") + " + arbete " + kr(laborCost(it))}>{kr(current(it))}</td>
       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
     </tr>
   );

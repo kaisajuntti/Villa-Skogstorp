@@ -128,6 +128,15 @@ export default function Budget({ id = "budget" }) {
     for (const w of workOf(it)) { const h = parseNum(w.h); if (h) o[w.typ] = (o[w.typ] || 0) + h; }
     return o;
   };
+  // "Maskinist 56 h · Snickare 52 h" for a set of rows
+  const typSummary = (arr) => {
+    const o = {};
+    for (const it of arr) for (const [t, h] of Object.entries(hoursByTyp(it))) o[t] = (o[t] || 0) + h;
+    const keys = [...typs.filter((t) => o[t]), ...Object.keys(o).filter((t) => !typs.includes(t))];
+    return keys.map((t) => t + " " + hFmt(o[t])).join(" · ");
+  };
+  const fmtD = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("sv-SE", { day: "numeric", month: "short" }).replace(".", "");
+  const phaseWhen = (p) => (p && p.start && p.end ? fmtD(p.start) + " – " + fmtD(p.end) + " " + p.end.slice(0, 4) : "");
   const roomName = (id) => (rooms || []).find((r) => r.id === id)?.name || (id ? "(borttaget rum)" : OVERGRIP);
 
   const setPhases = (next) => update({ phases: next });
@@ -267,7 +276,7 @@ export default function Budget({ id = "budget" }) {
       <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 48 }} />}</td>
       <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}</td>
       <td style={td()}><WorkCell work={it.work} typs={typs} ro={ro} onChange={(w) => patchItem(it.id, { work: w })} /></td>
-      <td style={td()}>{ro ? (it.leverans || "—") : <input type="date" value={it.leverans || ""} title="Leveransdatum (material)" onChange={(e) => patchItem(it.id, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 98, fontSize: 11 }} />}</td>
+      <td style={td()}>{ro ? (it.leverans || "—") : <input type="date" value={it.leverans || ""} title="Datum för materialleverans (extern leverans)" onChange={(e) => patchItem(it.id, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 98, fontSize: 11 }} />}</td>
       <td style={{ ...td("center"), padding: "3px 2px" }}>{ro ? (it.oklart ? "✓" : "") : <input type="checkbox" checked={!!it.oklart} title="Oklart om posten behövs" onChange={(e) => patchItem(it.id, { oklart: e.target.checked })} />}</td>
       <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={laborCost(it) ? "Material/UE " + kr(est(it)) + " + arbete " + kr(laborCost(it)) : undefined}>{kr(current(it))}</td>
       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
@@ -308,7 +317,7 @@ export default function Budget({ id = "budget" }) {
             <td colSpan={NCOLS} style={{ padding: "6px 6px 4px", background: "var(--line)", borderTop: "1px solid var(--line)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                 <span style={{ fontWeight: 700, fontSize: 11.5, textTransform: "uppercase", letterSpacing: 0.5 }}>{k || NODEL}</span>
-                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)}{cH > 0 && <span style={{ color: "var(--muted)" }}> · {hFmt(cH)}</span>}</span>
+                <span className="mono" style={{ fontSize: 11.5 }}>{kr(cCur)}{cH > 0 && <span style={{ color: "var(--muted)" }}> · {typSummary(arr)}</span>}</span>
               </div>
             </td>
           </tr>
@@ -326,7 +335,7 @@ export default function Budget({ id = "budget" }) {
           <a key={e.id} href={e.href} className={"btn small" + (e.id === id ? " primary" : "")}>{e.label}</a>
         ))}
       </div>
-      <p className="sub">Varje post = material/UE (mängd × á-pris, eller á-pris som klumpsumma om mängd lämnas tom) + arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Leveransdatum på material visas i tidslinjen. Alla priser ex moms.</p>
+      <p className="sub">Varje post = material/UE (mängd × á-pris, eller á-pris som klumpsumma om mängd lämnas tom) + arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Alla priser ex moms.</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
@@ -443,7 +452,7 @@ export default function Budget({ id = "budget" }) {
               )}
               {deliveries.length > 0 && (
                 <div style={{ display: "flex", alignItems: "center", height: 22, marginTop: 4 }}>
-                  <div style={{ width: LABELW, fontSize: 11.5, paddingRight: 6 }}>Leveranser</div>
+                  <div style={{ width: LABELW, fontSize: 11.5, paddingRight: 6 }}>Materialleveranser</div>
                   <div style={{ position: "relative", flex: 1, height: 14 }}>
                     {deliveries.map((d, j) => (
                       <div key={j} title={d.it.leverans + ": " + d.it.desc} style={{ position: "absolute", left: ((d.t - minT) / span) * 100 + "%", top: 1, width: 10, height: 10, background: "var(--ink)", transform: "translateX(-5px) rotate(45deg)" }} />
@@ -456,7 +465,7 @@ export default function Budget({ id = "budget" }) {
         )}
         {deliveries.length > 0 && (
           <div style={{ marginTop: 10, fontSize: 12 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>Leveranser</div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>Materialleveranser</div>
             {deliveries.map((d, j) => (
               <div key={j} style={{ display: "flex", gap: 10, borderTop: "1px solid var(--line)", padding: "3px 0" }}>
                 <span className="mono" style={{ whiteSpace: "nowrap" }}>{d.it.leverans}</span>
@@ -531,8 +540,18 @@ export default function Budget({ id = "budget" }) {
           <div key={g.key} className="card" style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 600 }}>{g.label}</div>
-              <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)}{gH > 0 && <span style={{ fontWeight: 400, color: "var(--muted)", fontSize: 12 }}> · {hFmt(gH)}</span>}</div>
+              <div className="mono" style={{ fontWeight: 700 }}>{kr(gCur)}</div>
             </div>
+            {(() => {
+              const when = groupBy === "phase" ? phaseWhen(phases.find((p) => p.id === g.key)) : "";
+              const who = gH > 0 ? typSummary(g.items) : "";
+              return (when || who) ? (
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, marginTop: 3 }}>
+                  {when && <span><span style={{ color: "var(--muted)" }}>När: </span><b>{when}</b></span>}
+                  {who && <span><span style={{ color: "var(--muted)" }}>Arbete: </span><span className="mono">{who}</span></span>}
+                </div>
+              ) : null;
+            })()}
             <div style={{ overflowX: "auto", marginTop: 8 }}>
               <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1080, fontSize: 12.5 }}>
                 <thead>
@@ -547,7 +566,7 @@ export default function Budget({ id = "budget" }) {
                     <th style={th()}>Enhet</th>
                     <th style={th("right")}>Á-pris</th>
                     <th style={th()}>Arbete</th>
-                    <th style={th()}>Leverans</th>
+                    <th style={{ ...th(), whiteSpace: "normal", lineHeight: 1.15 }}>Material&shy;leverans</th>
                     <th style={{ ...th("center"), padding: "4px 2px" }} title="Oklart om posten behövs">?</th>
                     <th style={th("right")}>Summa</th>
                     {!ro && <th style={{ width: 26 }}></th>}

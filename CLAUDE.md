@@ -194,6 +194,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   rivning av friggebod + carport ligger kvar i etapp 1. Matjord bakom tillbyggnaden läggs i etapp 1
   (maskin når inte dit efteråt).
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
+- **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
+  (i dag aggregerad per benämning + enhet, sorterad på kr).
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)
 

@@ -213,6 +213,13 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - Gamla krypgrunden är uteluftsventilerad (otät stenfot) – **ska inte tätas**; bjälklaget ovanför ska vara tätt.
 - Ansvariga: **Pelle** = snickare/totalentreprenör (default). **Linus** = fönster och dörrar.
 - Fönster/dörrar från **Snickarglädje** (snickargladje.com, prislistor exkl. moms) – **25 % rabatt**.
+- **Ventilation (beslutat 2026-10)**: frånluft (F) i stället för FTX. Tillbyggnaden: frånluftsmodul (NIBE FLM) mot
+  bergvärmen i teknikrum (förrådet), schakt **S1** intill tvättnedkastet (WC/D plan 2 + tvätt/städ plan 1 → källarens
+  undertak), dusch + bastu direkt. Befintligt: vindsfläkt för master bath + WC entré; köket = **takfläkt över ön** med
+  fjärrmotor på vinden, kanal i kökets tak till schakt **S2** (garderobshörnet i walk-in closet ovanför skafferiet).
+  Tilluft via fönsterventiler (beställs med fönstren) + uteluftsdon bakom radiatorer i sovrummen. Inget don i gymmet,
+  ingen extern kaminluft (för nu). Ingen murstock/fundament i källaren – prefab lättskorsten. Ritningar:
+  `public/plans/ventilation/*.jpg`, länkade i Projekt → Dokument.
 
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)
 

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSpace, useRooms } from "../state.js";
 import { spaceKey } from "../storage.js";
 import { canEdit } from "../config.js";
@@ -32,6 +32,27 @@ const hoursOf = (it) => (it.category === "Arbete" && /tim/i.test(it.unit || "") 
 const hFmt = (h) => (Math.round(h) + " h");
 
 const cell = { padding: "4px 6px", fontSize: 12.5 };
+
+// Description cell: a textarea that wraps long text and grows to fit it (instead of a
+// one-line input that cuts the text off). Enter doesn't add line breaks.
+function AutoText({ value, onChange, placeholder }) {
+  const ref = useRef(null);
+  const fit = () => { const el = ref.current; if (!el) return; el.style.height = "auto"; el.style.height = el.scrollHeight + 2 + "px"; };
+  useLayoutEffect(fit, [value]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <textarea ref={ref} rows={1} value={value} placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value.replace(/\n/g, " "))}
+      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+      style={{ ...cell, minWidth: 260, width: "100%", minHeight: 0, resize: "none", overflow: "hidden", lineHeight: 1.35, display: "block" }} />
+  );
+}
 const sel = { ...cell, border: "1.5px solid var(--ink)", borderRadius: 7, background: "#fff", fontFamily: "inherit" };
 const th = (align = "left") => ({ padding: "4px 6px", fontWeight: 600, whiteSpace: "nowrap", textAlign: align, fontSize: 10.5, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--muted)" });
 const td = (align = "left") => ({ padding: "3px 4px", verticalAlign: "middle", textAlign: align });
@@ -148,7 +169,7 @@ export default function Budget({ id = "budget" }) {
   // One item row — shared by the flat and the del-clustered rendering.
   const renderRow = (it) => (
     <tr key={it.id} style={{ borderTop: "1px solid var(--line)" }}>
-      <td style={td()}>{ro ? (it.desc || "—") : <input type="text" value={it.desc} placeholder="Beskrivning" title={it.desc || ""} onChange={(e) => patchItem(it.id, { desc: e.target.value })} style={{ ...cell, minWidth: 220 }} />}</td>
+      <td style={{ ...td(), minWidth: 260, whiteSpace: "normal" }}>{ro ? (it.desc || "—") : <AutoText value={it.desc} placeholder="Beskrivning" onChange={(v) => patchItem(it.id, { desc: v })} />}</td>
       {groupBy !== "phase" && <td style={td()}>{ro ? (phases.find((p) => p.id === it.phaseId)?.name || "—") : (
         <select value={it.phaseId || ""} onChange={(e) => patchItem(it.id, { phaseId: e.target.value })} style={sel}>
           <option value="">—</option>

@@ -12,11 +12,8 @@ const DEFAULT_PHASES = [
   "Markarbeten", "Rivning", "Grund tillbyggnad / källare", "Tillbyggnad",
   "Renovering befintlig", "Takomläggning befintligt", "Terrass (utomhus)", "Friggebod", "Garage",
 ];
-// Kostnadstyp for the row's amount (mängd × á-pris). Arbete is not a category any more —
-// it is computed from the row's yrken × timmar × timpris.
-const CATS = ["Material", "UE/tjänst"];
-const CAT_SHORT = { "Material": "Material", "UE/tjänst": "UE/tjänst", "": "—" };
-const catOf = (it) => (it.category === "Övrigt" ? "UE/tjänst" : it.category || "");
+// A row = Material (qty × estUnit, or estUnit as lump) + Extern (`ext`, UE/tjänst lump)
+// + Arbete (`work`: yrken × timmar × timpris). `category` is legacy and no longer used.
 const OVERGRIP = "Övergripande";
 // "Del" = byggdel/moment (free text). These are just suggestions in a datalist —
 // you can type anything ("Kök", "Trädäck", …). Used for sub-headers within a group.
@@ -46,6 +43,8 @@ const TYP_COLORS = ["#5A7A8C", "#8C6A3F", "#5E8C5A", "#9a4a3a", "#7A5A8C", "#3F7
 
 const cell = { padding: "4px 6px", fontSize: 12.5 };
 const OKLART_BG = "#FBF3E4";
+const TAG = { fontSize: 11, padding: "1px 5px", border: "1px solid var(--line)", borderRadius: 10, background: "#fff", fontFamily: "inherit", color: "var(--ink)", minHeight: 0 };
+const TAG_EMPTY = { borderColor: "#c9a08f", background: "#fbefe9" };
 const OKLART_TAG = { display: "inline-block", fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, color: "#9a4a3a", border: "1px solid #9a4a3a", borderRadius: 4, padding: "0 4px", marginBottom: 3 };
 
 // Description cell: a textarea that wraps long text and grows to fit it (instead of a
@@ -124,7 +123,8 @@ export default function Budget({ id = "budget" }) {
   // Per row: material/UE part (mängd × á-pris) + arbete (yrke × timmar × timpris).
   const workOf = (it) => (Array.isArray(it.work) ? it.work : []);
   const laborCost = (it) => workOf(it).reduce((s, w) => s + parseNum(w.h) * rateOf(w.typ), 0);
-  const current = (it) => est(it) + laborCost(it);
+  const extOf = (it) => parseNum(it.ext);
+  const current = (it) => est(it) + extOf(it) + laborCost(it);
   const hoursOf = (it) => legacyH(it) + workOf(it).reduce((s, w) => s + parseNum(w.h), 0);
   const hoursByTyp = (it) => {
     const o = {}; const lh = legacyH(it); if (lh) o[LEGACY_TYP] = lh;
@@ -151,8 +151,8 @@ export default function Budget({ id = "budget" }) {
   const patchItem = (id, p) => setItems(items.map((x) => (x.id === id ? { ...x, ...p } : x)));
   const delItem = (id) => setItems(items.filter((x) => x.id !== id));
   const addItem = (preset) => setItems([...items, {
-    id: uid(), desc: "", phaseId: phases[0]?.id || "", roomId: "", category: "Material",
-    entreprenor: "Pelle", del: "", qty: "", unit: "", estUnit: "", work: [], ...preset,
+    id: uid(), desc: "", phaseId: phases[0]?.id || "", roomId: "",
+    entreprenor: "Pelle", del: "", qty: "", unit: "", estUnit: "", ext: "", work: [], ...preset,
   }]);
 
   // ---- totals ----
@@ -167,9 +167,9 @@ export default function Budget({ id = "budget" }) {
   for (const it of items) {
     const c = current(it); sumCur += c;
     if (it.oklart) sumOklart += c;
-    // legacy Arbete rows (timmar × 580) count as Arbete; otherwise the amount goes to its kostnadstyp
-    const ck = legacyH(it) ? "Arbete" : (catOf(it) || "Material");
-    byCat[ck] = (byCat[ck] || 0) + est(it);
+    // Material = mängd × á-pris · Extern = UE/tjänst-belopp · Arbete = yrken × timmar (+ ev. gamla arbetsrader)
+    byCat[legacyH(it) ? "Arbete" : "Material"] = (byCat[legacyH(it) ? "Arbete" : "Material"] || 0) + est(it);
+    byCat["Extern"] = (byCat["Extern"] || 0) + extOf(it);
     if (laborCost(it)) byCat["Arbete"] = (byCat["Arbete"] || 0) + laborCost(it);
     for (const [t, h] of Object.entries(hoursByTyp(it))) byTypH[t] = (byTypH[t] || 0) + h;
     byBuild[buildOf(it.phaseId)] = (byBuild[buildOf(it.phaseId)] || 0) + c;
@@ -187,13 +187,7 @@ export default function Budget({ id = "budget" }) {
   // ---- grouping ----
   const phaseIds = new Set(phases.map((p) => p.id));
   let groups;
-  if (groupBy === "category") {
-    groups = CATS.map((c) => ({ key: c, label: c, preset: { category: c }, items: items.filter((i) => catOf(i) === c && est(i) !== 0) }));
-    const onlyWork = items.filter((i) => est(i) === 0);
-    if (onlyWork.length) groups.push({ key: "_w", label: "Endast arbete (inget material/UE)", preset: { category: "" }, items: onlyWork });
-    const other = items.filter((i) => est(i) !== 0 && !CATS.includes(catOf(i)));
-    if (other.length) groups.push({ key: "_o", label: "Övrigt", preset: {}, items: other });
-  } else if (groupBy === "del") {
+  if (groupBy === "del") {
     const names = [];
     for (const it of items) { const n = (it.del || "").trim(); if (n && !names.includes(n)) names.push(n); }
     names.sort((a, b) => (delOrder(a) - delOrder(b)) || a.localeCompare(b, "sv"));
@@ -252,43 +246,42 @@ export default function Budget({ id = "budget" }) {
   }
   const LABELW = 140;
 
-  const NCOLS = 14 - ["phase", "del", "room", "category", "ent"].filter((k) => k === groupBy).length - (ro ? 1 : 0);
+  const NCOLS = 13 - ["phase", "ent"].filter((k) => k === groupBy).length - (ro ? 1 : 0);
 
   // One item row — shared by the flat and the del-clustered rendering.
   const renderRow = (it) => (
     <tr key={it.id} style={{ borderTop: "1px solid var(--line)", background: it.oklart ? OKLART_BG : undefined }}>
-      <td style={{ ...td(), minWidth: 185, whiteSpace: "normal" }}>
+      <td style={{ ...td(), minWidth: 200, whiteSpace: "normal" }}>
         {it.oklart && <span style={OKLART_TAG}>OKLART</span>}
         {ro ? (it.desc || "—") : <AutoText value={it.desc} placeholder="Beskrivning" onChange={(v) => patchItem(it.id, { desc: v })} />}
+        <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 3, fontSize: 11 }}>
+          {ro ? <span style={{ color: it.del ? "var(--ink)" : "var(--muted)" }}>{it.del || "—"}</span> : (
+            <input type="text" list="budget-delar" value={it.del || ""} placeholder="+ del" title="Del/byggdel"
+              onChange={(e) => patchItem(it.id, { del: e.target.value })} style={{ ...TAG, width: 86, ...(it.del ? {} : TAG_EMPTY) }} />
+          )}
+          <span style={{ color: "var(--muted)" }}>·</span>
+          {ro ? <span style={{ color: it.roomId ? "var(--ink)" : "var(--muted)" }}>{roomName(it.roomId)}</span> : (
+            <select value={it.roomId || ""} title="Rum" onChange={(e) => patchItem(it.id, { roomId: e.target.value })} style={{ ...TAG, maxWidth: 120, color: it.roomId ? "var(--ink)" : "var(--muted)" }}>
+              <option value="">{OVERGRIP}</option>
+              {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          )}
+        </div>
       </td>
       {groupBy !== "phase" && <td style={td()}>{ro ? (phases.find((p) => p.id === it.phaseId)?.name || "—") : (
-        <select value={it.phaseId || ""} onChange={(e) => patchItem(it.id, { phaseId: e.target.value })} style={sel}>
+        <select value={it.phaseId || ""} onChange={(e) => patchItem(it.id, { phaseId: e.target.value })} style={{ ...sel, maxWidth: 120 }}>
           <option value="">—</option>
           {phases.map((p, i) => <option key={p.id} value={p.id}>{i + 1}. {p.name}</option>)}
         </select>)}</td>}
-      {groupBy !== "del" && <td style={td()}>{ro ? (it.del || "—") : (
-        <>
-          <input type="text" list="budget-delar" value={it.del || ""} placeholder="t.ex. Golv" title={it.del || ""} onChange={(e) => patchItem(it.id, { del: e.target.value })} style={{ ...cell, width: 72 }} />
-        </>)}</td>}
-      {groupBy !== "room" && <td style={td()}>{ro ? roomName(it.roomId) : (
-        <select value={it.roomId || ""} onChange={(e) => patchItem(it.id, { roomId: e.target.value })} style={{ ...sel, maxWidth: 92 }}>
-          <option value="">{OVERGRIP}</option>
-          {(rooms || []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>)}</td>}
-      {groupBy !== "category" && <td style={td()}>{ro ? (CAT_SHORT[catOf(it)] ?? catOf(it)) : (
-        <select value={catOf(it)} onChange={(e) => patchItem(it.id, { category: e.target.value })} style={{ ...sel, maxWidth: 84 }}>
-          <option value="">—</option>
-          {CATS.map((c) => <option key={c} value={c}>{CAT_SHORT[c]}</option>)}
-          {catOf(it) && !CATS.includes(catOf(it)) && <option value={catOf(it)}>{catOf(it)}</option>}
-        </select>)}</td>}
-      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, width: 76 }} />}</td>}
-      <td style={td("right")}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 50, textAlign: "right" }} />}</td>
-      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 48 }} />}</td>
+      {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, width: 80 }} />}</td>}
+      <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 48, textAlign: "right" }} />}</td>
+      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 46 }} />}</td>
       <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}</td>
-      <td style={td()}><WorkCell work={it.work} typs={typs} ro={ro} onChange={(w) => patchItem(it.id, { work: w })} /></td>
+      <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? (it.ext ? kr(extOf(it)) : "—") : <input type="text" inputMode="decimal" value={it.ext || ""} placeholder="kr" title="Extern: UE/tjänst, fast pris" onChange={(e) => patchItem(it.id, { ext: e.target.value })} style={{ ...cell, width: 70, textAlign: "right" }} />}</td>
+      <td style={{ ...td(), borderLeft: "1px solid var(--line)" }}><WorkCell work={it.work} typs={typs} ro={ro} onChange={(w) => patchItem(it.id, { work: w })} /></td>
       <td style={td()}>{ro ? (it.leverans || "—") : <input type="date" value={it.leverans || ""} title="Datum för materialleverans (extern leverans)" onChange={(e) => patchItem(it.id, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 98, fontSize: 11 }} />}</td>
       <td style={{ ...td("center"), padding: "3px 2px" }}>{ro ? (it.oklart ? "✓" : "") : <input type="checkbox" checked={!!it.oklart} title="Oklart om posten behövs" onChange={(e) => patchItem(it.id, { oklart: e.target.checked })} />}</td>
-      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={laborCost(it) ? "Material/UE " + kr(est(it)) + " + arbete " + kr(laborCost(it)) : undefined}>{kr(current(it))}</td>
+      <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={"Material " + kr(est(it)) + " + extern " + kr(extOf(it)) + " + arbete " + kr(laborCost(it))}>{kr(current(it))}</td>
       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
     </tr>
   );
@@ -345,7 +338,7 @@ export default function Budget({ id = "budget" }) {
           <a key={e.id} href={e.href} className={"btn small" + (e.id === id ? " primary" : "")}>{e.label}</a>
         ))}
       </div>
-      <p className="sub">Varje post = belopp (mängd × á-pris, eller á-pris som klumpsumma om mängd lämnas tom) med typ Material eller UE/tjänst (köpt av extern part) + arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Alla priser ex moms.</p>
+      <p className="sub">Varje post = Material (det ni köper: mängd × á-pris, eller á-pris som klumpsumma) + Extern (UE/tjänst – någon annan gör det till fast pris) + Arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Alla priser ex moms.</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>
@@ -355,11 +348,8 @@ export default function Budget({ id = "budget" }) {
         </div>
         <div className="row" style={{ marginTop: 8, gap: 18, fontSize: 12.5, color: "var(--muted)" }}>
           <span>Material: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Material"] || 0)}</span></span>
-          <span>UE/tjänster: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["UE/tjänst"] || 0)}</span></span>
+          <span>Extern (UE/tjänster): <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Extern"] || 0)}</span></span>
           <span>Arbete (egna hantverkare): <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat["Arbete"] || 0)}</span></span>
-          {Object.keys(byCat).filter((k) => !["Material", "UE/tjänst", "Arbete"].includes(k) && byCat[k]).map((k) => (
-            <span key={k}>{k}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byCat[k])}</span></span>
-          ))}
         </div>
         {sumOklart !== 0 && (
           <div style={{ marginTop: 6, fontSize: 12.5, color: "#9a4a3a" }}>varav oklart: <span className="mono">{kr(sumOklart)}</span></div>
@@ -494,7 +484,7 @@ export default function Budget({ id = "budget" }) {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["category", "Kostnadstyp"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>
@@ -507,7 +497,7 @@ export default function Budget({ id = "budget" }) {
         // Aggregate all Material rows by (desc + unit) across every room/phase.
         const agg = {};
         for (const it of items) {
-          if (it.category !== "Material") continue;
+          if (!est(it) || legacyH(it)) continue;
           const key = (it.desc || "—").trim() + " | " + (it.unit || "");
           if (!agg[key]) agg[key] = { desc: (it.desc || "—").trim(), unit: it.unit || "", qty: 0, sum: 0 };
           agg[key].qty += parseNum(it.qty); agg[key].sum += est(it);
@@ -571,14 +561,10 @@ export default function Budget({ id = "budget" }) {
                   <tr>
                     <th style={th()}>Post</th>
                     {groupBy !== "phase" && <th style={th()}>Fas</th>}
-                    {groupBy !== "del" && <th style={th()}>Del</th>}
-                    {groupBy !== "room" && <th style={th()}>Rum</th>}
-                    {groupBy !== "category" && <th style={th()} title="Kostnadstyp för beloppet (mängd × á-pris)">Typ</th>}
                     {groupBy !== "ent" && <th style={th()}>Ansvarig</th>}
-                    <th style={th("right")}>Mängd</th>
-                    <th style={th()}>Enhet</th>
-                    <th style={th("right")}>Á-pris</th>
-                    <th style={th()}>Arbete</th>
+                    <th colSpan={3} style={{ ...th("center"), borderLeft: "1px solid var(--line)" }} title="Det ni köper: mängd × á-pris (eller á-pris som klumpsumma)">Material <span style={{ fontWeight: 400, textTransform: "none" }}>(mängd · enhet · á-pris)</span></th>
+                    <th style={{ ...th("right"), borderLeft: "1px solid var(--line)" }} title="UE/tjänst – någon annan gör det eller tar betalt, fast pris">Extern</th>
+                    <th style={{ ...th(), borderLeft: "1px solid var(--line)" }} title="Egna hantverkare: yrke × timmar">Arbete</th>
                     <th style={{ ...th(), whiteSpace: "normal", lineHeight: 1.15 }}>Material&shy;leverans</th>
                     <th style={{ ...th("center"), padding: "4px 2px" }} title="Oklart om posten behövs">?</th>
                     <th style={th("right")}>Summa</th>

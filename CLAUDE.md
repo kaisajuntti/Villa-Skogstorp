@@ -197,6 +197,23 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
   (i dag aggregerad per benämning + enhet, sorterad på kr).
 
+## Byggnadsfakta (för budget/tidsplan – bekräftat med beställaren 2026-10)
+
+- **Tillbyggnaden** = den korsformade flygeln i **väster** (situationsplanen, 4010 × 7020 m.fl.), plan 1 + 2 + ny
+  källare under. Den sträcker sig fram till tornet men **tornet ingår inte**.
+- **Tornet sitter ovanför entrén mot gårdsplanen och är en del av BEFINTLIG byggnad**. Entrédörren (pardörr) hör
+  till Renovering befintlig, inte till tillbyggnadens stomme.
+- **Ny källare är sutteräng**: norrsidan (inkl. under trapphuset) helt under mark, väster ~50 %, söder ~0,5 m under
+  mark. Synliga delar kläs med **naturstensplattor** (ska se ut som naturstenssockel) på bredare sockelplåt.
+- Gamla gråstensmuren mot befintlig källare/krypgrund **rivs och ersätts** med bärande Exakt-vägg (del av grunden);
+  stämpning sätts vid schakt och tas bort när väggen är uppmurad. Ingen valvöppning behövs.
+- Gamla källartrappan ligger **inte** där den nya trappan kommer – ingen koppling.
+- Murstocken rivs från taket ner till bjälklaget på plan 1 (krypgrund under). Tegel och gråsten sparas på tomten.
+- Befintligt tak: hälften plåt, hälften papp; tillbyggnaden ansluter mot **pappdelen**.
+- Gamla krypgrunden är uteluftsventilerad (otät stenfot) – **ska inte tätas**; bjälklaget ovanför ska vara tätt.
+- Ansvariga: **Pelle** = snickare/totalentreprenör (default). **Linus** = fönster och dörrar.
+- Fönster/dörrar från **Snickarglädje** (snickargladje.com, prislistor exkl. moms) – **25 % rabatt**.
+
 ## Rumsplanerare (ported from kok-planner-v2 artifact — behavior parity)
 
 Core UX model — three-step flow (settled, do not change without discussion):

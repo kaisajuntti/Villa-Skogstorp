@@ -214,7 +214,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - Ansvariga: **Pelle** = snickare/totalentreprenör (default). **Linus** = fönster och dörrar.
 - Fönster/dörrar från **Snickarglädje** (snickargladje.com, prislistor exkl. moms) – **25 % rabatt**.
 - **Ventilation (beslutat 2026-10)**: frånluft (F) i stället för FTX. Tillbyggnaden: frånluftsmodul (NIBE FLM) mot
-  bergvärmen i teknikrum (förrådet), schakt **S1** intill tvättnedkastet (WC/D plan 2 + tvätt/städ plan 1 → källarens
+  bergvärmen i **teknikrum = förrådet i tillbyggnadens källare** (bekräftat; INSTALL i befintlig källare är dagens plats för installationerna – dålig plats, ska inte användas), schakt **S1** intill tvättnedkastet (WC/D plan 2 + tvätt/städ plan 1 → källarens
   undertak), dusch + bastu direkt. Befintligt: vindsfläkt för master bath + WC entré; köket = **takfläkt över ön** med
   fjärrmotor på vinden, kanal i kökets tak till schakt **S2** (garderobshörnet i walk-in closet ovanför skafferiet).
   Tilluft via fönsterventiler (beställs med fönstren) + uteluftsdon bakom radiatorer i sovrummen. Inget don i gymmet,

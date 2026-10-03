@@ -167,6 +167,12 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   borrfirma, El/VVS lumps …) + `extNote` (short "vad/vem" text shown under the amount); **Arbete** = `work` × rates. No category column any more (`category`
   removed from data; migrated UE/tjänst amounts → `ext`). Del + Rum are shown as small tags under the
   description (empty del highlighted) instead of columns. Summary: Material · Extern · Arbete.
+  **Material lines (2026-10)**: optional `mat: [{desc, qty, unit, price, leverans?}]` on a row; when
+  present, Material = Σ lines (qty × price, or price as lump) and qty/unit/estUnit are unused. UI: the
+  row's Material cell shows the total + "▸ N rader" toggle; expanded sub-table edits lines; "+ specificera"
+  converts a single-material row into lines. Line `leverans` dates feed the Gantt/Materialleveranser.
+  **El and VVS are own yrken (hours × 625 + material), not Extern** — Extern is only for truly bought-in
+  services (kommun, åkeri, plåtslagare, borrfirma, konstruktör …).
   **7 h/dag/person is deliberate slack** (vs 8 h ≈ 10 %) — don't add a separate buffer on top.
 - **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
   top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +

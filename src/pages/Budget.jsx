@@ -24,7 +24,11 @@ const delOrder = (d) => { const i = DELAR.indexOf(d); return i < 0 ? DELAR.lengt
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const parseNum = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n)) + " kr";
-const est = (it) => { const q = parseNum(it.qty); return q ? q * parseNum(it.estUnit) : parseNum(it.estUnit); };
+// Material line: mängd × á-pris (or á-pris as lump when mängd is blank).
+const lineAmt = (l) => { const q = parseNum(l.qty); return q ? q * parseNum(l.price) : parseNum(l.price); };
+const matLines = (it) => (Array.isArray(it.mat) && it.mat.length ? it.mat : null);
+// Material for a row: sum of its material lines (`mat`), else the single qty × estUnit.
+const est = (it) => { const m = matLines(it); if (m) return m.reduce((s, l) => s + lineAmt(l), 0); const q = parseNum(it.qty); return q ? q * parseNum(it.estUnit) : parseNum(it.estUnit); };
 // Legacy labour rows (category Arbete, unit "timmar", á-pris = kr/h) count as Snickare hours.
 const legacyH = (it) => (it.category === "Arbete" && /tim/i.test(it.unit || "") ? parseNum(it.qty) : 0);
 const hFmt = (h) => (Math.round(h) + " h");
@@ -104,6 +108,7 @@ export default function Budget({ id = "budget" }) {
   const [space, update] = useSpace(id);
   const { rooms } = useRooms();
   const [groupBy, setGroupBy] = useState("phase");
+  const [openMat, setOpenMat] = useState({}); // item id → material lines expanded
 
   const phases = useMemo(
     () => (space && space.phases && space.phases.length
@@ -230,7 +235,10 @@ export default function Budget({ id = "budget" }) {
     }
   }
   const typRows = [...typs.filter((t) => typSegs[t]), ...Object.keys(typSegs).filter((t) => !typs.includes(t))];
-  const deliveries = items.filter((it) => it.leverans).map((it) => ({ t: +new Date(it.leverans + "T00:00:00"), it })).sort((a, b) => a.t - b.t);
+  const deliveries = [
+    ...items.filter((it) => it.leverans).map((it) => ({ date: it.leverans, desc: it.desc, it })),
+    ...items.flatMap((it) => (matLines(it) || []).filter((l) => l.leverans).map((l) => ({ date: l.leverans, desc: (l.desc || "Material") + " – " + it.desc, it }))),
+  ].map((d) => ({ ...d, t: +new Date(d.date + "T00:00:00") })).sort((a, b) => a.t - b.t);
   const allT = [...dated.flatMap((p) => [+new Date(p.start), +new Date(p.end)]), ...Object.values(typSegs).flat().map((x) => x.end), ...deliveries.map((d) => d.t)];
   const minT = allT.length ? Math.min(...allT) : 0;
   const maxT = allT.length ? Math.max(...allT) : 0;
@@ -249,8 +257,36 @@ export default function Budget({ id = "budget" }) {
   const NCOLS = 13 - ["phase", "ent"].filter((k) => k === groupBy).length - (ro ? 1 : 0);
 
   // One item row — shared by the flat and the del-clustered rendering.
+  const patchLine = (it, j, p) => patchItem(it.id, { mat: matLines(it).map((l, k) => (k === j ? { ...l, ...p } : l)) });
+  const renderMatLines = (it) => (
+    <tr key={it.id + ":mat"} style={{ background: it.oklart ? OKLART_BG : "#FCFBF8" }}>
+      <td colSpan={NCOLS} style={{ padding: "2px 6px 8px 28px" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 12 }}>
+          <thead><tr>
+            <th style={th()}>Material</th><th style={th("right")}>Mängd</th><th style={th()}>Enhet</th><th style={th("right")}>Á-pris</th><th style={th("right")}>Summa</th><th style={th()}>Materialleverans</th>{!ro && <th></th>}
+          </tr></thead>
+          <tbody>
+            {matLines(it).map((l, j) => (
+              <tr key={j} style={{ borderTop: "1px solid var(--line)" }}>
+                <td style={td()}>{ro ? (l.desc || "—") : <AutoText value={l.desc || ""} placeholder="t.ex. Makadam 0/16" onChange={(v) => patchLine(it, j, { desc: v })} style={{ minWidth: 0, width: 280 }} />}</td>
+                <td style={td("right")}>{ro ? l.qty : <input type="text" inputMode="decimal" value={l.qty || ""} onChange={(e) => patchLine(it, j, { qty: e.target.value })} style={{ ...cell, width: 52, textAlign: "right" }} />}</td>
+                <td style={td()}>{ro ? l.unit : <input type="text" value={l.unit || ""} placeholder="m²…" onChange={(e) => patchLine(it, j, { unit: e.target.value })} style={{ ...cell, width: 48 }} />}</td>
+                <td style={td("right")}>{ro ? l.price : <input type="text" inputMode="decimal" value={l.price || ""} onChange={(e) => patchLine(it, j, { price: e.target.value })} style={{ ...cell, width: 70, textAlign: "right" }} />}</td>
+                <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap" }}>{kr(lineAmt(l))}</td>
+                <td style={td()}>{ro ? (l.leverans || "—") : <input type="date" value={l.leverans || ""} onChange={(e) => patchLine(it, j, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 110, fontSize: 11 }} />}</td>
+                {!ro && <td style={td()}><button className="btn small" style={{ padding: "0 5px", border: "none" }} title="Ta bort materialrad"
+                  onClick={() => { const m = matLines(it).filter((_, k) => k !== j); patchItem(it.id, m.length ? { mat: m } : { mat: [], qty: "", unit: "", estUnit: "" }); }}>✕</button></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!ro && <button className="btn small" style={{ marginTop: 4, fontSize: 11, padding: "1px 8px" }} onClick={() => patchItem(it.id, { mat: [...matLines(it), { desc: "", qty: "", unit: "", price: "" }] })}>+ materialrad</button>}
+      </td>
+    </tr>
+  );
   const renderRow = (it) => (
-    <tr key={it.id} style={{ borderTop: "1px solid var(--line)", background: it.oklart ? OKLART_BG : undefined }}>
+    <Fragment key={it.id}>
+    <tr style={{ borderTop: "1px solid var(--line)", background: it.oklart ? OKLART_BG : undefined }}>
       <td style={{ ...td(), minWidth: 180, whiteSpace: "normal" }}>
         {it.oklart && <span style={OKLART_TAG}>OKLART</span>}
         {ro ? (it.desc || "—") : <AutoText value={it.desc} placeholder="Beskrivning" onChange={(v) => patchItem(it.id, { desc: v })} />}
@@ -274,9 +310,24 @@ export default function Budget({ id = "budget" }) {
           {phases.map((p, i) => <option key={p.id} value={p.id}>{i + 1}. {p.name}</option>)}
         </select>)}</td>}
       {groupBy !== "ent" && <td style={td()}>{ro ? (it.entreprenor || "—") : <input type="text" value={it.entreprenor || ""} placeholder="t.ex. Pelle" title={it.entreprenor || ""} onChange={(e) => patchItem(it.id, { entreprenor: e.target.value })} style={{ ...cell, width: 80 }} />}</td>}
-      <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 48, textAlign: "right" }} />}</td>
-      <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 46 }} />}</td>
-      <td style={td("right")}>{ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}</td>
+      {matLines(it) ? (
+        <td colSpan={3} style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>
+          <button className="btn small" style={{ padding: "2px 8px", fontSize: 12 }} onClick={() => setOpenMat({ ...openMat, [it.id]: !openMat[it.id] })}>
+            <span className="mono" style={{ fontWeight: 600 }}>{kr(est(it))}</span>
+            <span style={{ color: "var(--muted)", marginLeft: 6 }}>{openMat[it.id] ? "▾" : "▸"} {matLines(it).length} rader</span>
+          </button>
+        </td>
+      ) : (
+        <>
+          <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? it.qty : <input type="text" inputMode="decimal" value={it.qty} onChange={(e) => patchItem(it.id, { qty: e.target.value })} style={{ ...cell, width: 48, textAlign: "right" }} />}</td>
+          <td style={td()}>{ro ? it.unit : <input type="text" value={it.unit} placeholder="m²…" onChange={(e) => patchItem(it.id, { unit: e.target.value })} style={{ ...cell, width: 46 }} />}</td>
+          <td style={td("right")}>
+            {ro ? it.estUnit : <input type="text" inputMode="decimal" value={it.estUnit} onChange={(e) => patchItem(it.id, { estUnit: e.target.value })} style={{ ...cell, width: 64, textAlign: "right" }} />}
+            {!ro && <div><button className="btn small" title="Dela upp materialet på flera rader" style={{ padding: "0 5px", fontSize: 10.5, border: "none", color: "var(--muted)" }}
+              onClick={() => { patchItem(it.id, { mat: [{ desc: "", qty: it.qty || "", unit: it.unit || "", price: it.estUnit || "", leverans: it.leverans || "" }], qty: "", unit: "", estUnit: "" }); setOpenMat({ ...openMat, [it.id]: true }); }}>+ specificera</button></div>}
+          </td>
+        </>
+      )}
       <td style={{ ...td("right"), borderLeft: "1px solid var(--line)" }}>{ro ? (
         <>{it.ext ? kr(extOf(it)) : "—"}{it.extNote && <div style={{ fontSize: 10.5, color: "var(--muted)", whiteSpace: "normal", maxWidth: 110 }}>{it.extNote}</div>}</>
       ) : (
@@ -291,6 +342,8 @@ export default function Budget({ id = "budget" }) {
       <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", fontWeight: 600 }} title={"Material " + kr(est(it)) + " + extern " + kr(extOf(it)) + (it.extNote ? " (" + it.extNote + ")" : "") + " + arbete " + kr(laborCost(it))}>{kr(current(it))}</td>
       {!ro && <td style={td("right")}><button className="btn small danger" style={{ padding: "2px 6px" }} onClick={() => delItem(it.id)}>✕</button></td>}
     </tr>
+    {matLines(it) && openMat[it.id] && renderMatLines(it)}
+    </Fragment>
   );
 
   // Render a group's rows: flat, or clustered under del sub-headers.
@@ -465,7 +518,7 @@ export default function Budget({ id = "budget" }) {
                   <div style={{ width: LABELW, fontSize: 11.5, paddingRight: 6 }}>Materialleveranser</div>
                   <div style={{ position: "relative", flex: 1, height: 14 }}>
                     {deliveries.map((d, j) => (
-                      <div key={j} title={d.it.leverans + ": " + d.it.desc} style={{ position: "absolute", left: ((d.t - minT) / span) * 100 + "%", top: 1, width: 10, height: 10, background: "var(--ink)", transform: "translateX(-5px) rotate(45deg)" }} />
+                      <div key={j} title={d.date + ": " + d.desc} style={{ position: "absolute", left: ((d.t - minT) / span) * 100 + "%", top: 1, width: 10, height: 10, background: "var(--ink)", transform: "translateX(-5px) rotate(45deg)" }} />
                     ))}
                   </div>
                 </div>
@@ -478,8 +531,8 @@ export default function Budget({ id = "budget" }) {
             <div style={{ fontWeight: 600, marginBottom: 4 }}>Materialleveranser</div>
             {deliveries.map((d, j) => (
               <div key={j} style={{ display: "flex", gap: 10, borderTop: "1px solid var(--line)", padding: "3px 0" }}>
-                <span className="mono" style={{ whiteSpace: "nowrap" }}>{d.it.leverans}</span>
-                <span>{d.it.desc}</span>
+                <span className="mono" style={{ whiteSpace: "nowrap" }}>{d.date}</span>
+                <span>{d.desc}</span>
                 <span style={{ marginLeft: "auto", color: "var(--muted)", whiteSpace: "nowrap" }}>{phaseName(d.it.phaseId)}</span>
               </div>
             ))}
@@ -503,7 +556,8 @@ export default function Budget({ id = "budget" }) {
       {groupBy === "material" && (() => {
         // Aggregate all Material rows by (desc + unit) across every room/phase.
         const agg = {};
-        for (const it of items) {
+        for (const it0 of items.flatMap((x) => (matLines(x) ? matLines(x).map((l) => ({ desc: l.desc || x.desc, unit: l.unit, qty: l.qty, mat: [l] })) : [x]))) {
+          const it = it0;
           if (!est(it) || legacyH(it)) continue;
           const key = (it.desc || "—").trim() + " | " + (it.unit || "");
           if (!agg[key]) agg[key] = { desc: (it.desc || "—").trim(), unit: it.unit || "", qty: 0, sum: 0 };

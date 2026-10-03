@@ -372,7 +372,7 @@ export default function Budget({ id = "budget" }) {
           </tbody>
         </table>
         {!ro && <button className="btn small" style={{ marginTop: 6 }} onClick={() => setRates([...rates, { typ: "Nytt yrke", rate: "", crew: "1" }])}>+ Yrke</button>}
-        <p className="sub" style={{ margin: "8px 0 0" }}>Gamla arbetsrader (kategori Arbete, enhet timmar) räknas som {LEGACY_TYP}. Arbetsdag = 7 h per person.</p>
+        <p className="sub" style={{ margin: "8px 0 0" }}>Gamla arbetsrader (kategori Arbete, enhet timmar) räknas som {LEGACY_TYP}. Arbetsdag = 7 h per person (mot normala 8 h ≈ 10 % slack inbakat i tidsplanen).</p>
       </div>
 
       {/* phases + timeline */}

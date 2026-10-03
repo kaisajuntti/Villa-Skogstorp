@@ -162,6 +162,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Phase view keeps row order (chronological) — del sub-header starts a new run when del changes.
   Mark is split: **p0 Markarbeten 1 – före grund** and **pMARK2 Markarbeten 2 – efter grund**
   (parallel with Stomme). Phase dates are computed (scripts) as max over yrken of ceil(h/(crew×7)).
+  **7 h/dag/person is deliberate slack** (vs 8 h ≈ 10 %) — don't add a separate buffer on top.
 - **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
   top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +
   trädgård + gårdsplan (200 m² smågatsten), Fokus 2 grund garage/friggebod (okt 2027, före tjäle),

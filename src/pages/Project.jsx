@@ -21,7 +21,7 @@ export const PDF_SECTIONS = [
   ["contacts", 2, "Kontakter & roller"],
   ["chapters", 3, "Projektbeskrivning"],
   ["tech", 4, "Tekniska val"],
-  ["decisions", 5, "Beslutslogg"],
+  ["decisions", 5, "Beslutslogg & att göra"],
   ["budget", 6, "Arbetsplan & budget"],
   ["floors", 7, "Våningar & utrymmen"],
   ["colors", 8, "Färgschema"],
@@ -114,7 +114,7 @@ export default function Project() {
 
       {S("tech", `${(space.tech || []).length} val`, <TechChoices space={space} update={update} />)}
 
-      {S("decisions", `${(space.decisions || []).length} beslut`, <Decisions space={space} update={update} />)}
+      {S("decisions", `${(space.decisions || []).length} beslut · ${(space.todos || []).filter((t) => (t.status || "Öppen") !== "Klar").length} att besluta/göra`, <Decisions space={space} update={update} opts={opts} />)}
 
       {S("budget", `Länkad från Budget · ${(budgetOpts.etapper || ["budget"]).map((e) => (e === "budget" ? "Etapp 1" : "Etapp 2")).join(" + ")} · ${(budgetOpts.views || ["summary", "gantt", "phases"]).length} vyer${budgetOpts.prices === false ? " · utan belopp" : ""}`,
         <BudgetOptions opts={opts} sum={sum} />)}

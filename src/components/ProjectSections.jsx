@@ -189,9 +189,55 @@ const decSummary = (r) => (
     {r.why && <div style={{ ...muted, marginTop: 2, lineHeight: 1.45 }}>{r.why}</div>}
   </div>
 );
-export function Decisions({ space, update }) {
-  return <RowList rows={space.decisions || []} onChange={(decisions) => update({ decisions })}
-    fields={DEC_FIELDS} addLabel="+ Lägg till beslut" summary={decSummary} empty="Inga beslut loggade än." />;
+// Part 2: Att besluta / att göra. space.todos = [{ id, area, item, detail, who, due, status }]
+export const TODO_STATUS = ["Öppen", "Pågår", "Klar"];
+const TODO_FIELDS = [
+  { k: "item", label: "Vad ska beslutas / göras", wide: true },
+  { k: "area", label: "Område" },
+  { k: "status", label: "Status", options: TODO_STATUS },
+  { k: "who", label: "Ansvarig" },
+  { k: "due", label: "Senast (ÅÅÅÅ-MM-DD)" },
+  { k: "detail", label: "Detaljer", wide: true, multi: true },
+];
+const STATUS_STYLE = {
+  "Öppen": { color: "#9a4a3a", borderColor: "#9a4a3a" },
+  "Pågår": { color: "#8C6A3F", borderColor: "#8C6A3F" },
+  "Klar": { color: "#5E8C5A", borderColor: "#5E8C5A" },
+};
+const todoSummary = (r) => {
+  const st = r.status || "Öppen";
+  return (
+    <div style={{ opacity: st === "Klar" ? 0.6 : 1 }}>
+      <div>
+        <span style={{ fontSize: 10.5, fontWeight: 700, border: "1px solid", borderRadius: 4, padding: "0 4px", marginRight: 6, ...STATUS_STYLE[st] }}>{st.toUpperCase()}</span>
+        <span style={{ ...muted, textTransform: "uppercase", letterSpacing: 1, fontSize: 11 }}>{r.area}</span>{" "}
+        <b style={{ textDecoration: st === "Klar" ? "line-through" : "none" }}>{r.item}</b>
+        {(r.who || r.due) && <span style={{ ...muted, marginLeft: 8 }}>{[r.who, r.due && "senast " + r.due].filter(Boolean).join(" · ")}</span>}
+      </div>
+      {r.detail && <div style={{ ...muted, marginTop: 2, lineHeight: 1.45, whiteSpace: "pre-line" }}>{r.detail}</div>}
+    </div>
+  );
+};
+export function Decisions({ space, update, opts }) {
+  const ro = !canEdit();
+  const todos = space.todos || [];
+  const open = todos.filter((t) => (t.status || "Öppen") !== "Klar").length;
+  return (
+    <div>
+      <h3 style={{ marginTop: 0 }}>Fattade beslut</h3>
+      <RowList rows={space.decisions || []} onChange={(decisions) => update({ decisions })}
+        fields={DEC_FIELDS} addLabel="+ Lägg till beslut" summary={decSummary} empty="Inga beslut loggade än." />
+      <h3 style={{ marginTop: 26 }}>Att besluta / att göra <span style={{ ...muted, fontWeight: 400 }}>· {open} öppna av {todos.length}</span></h3>
+      <RowList rows={todos} onChange={(t) => update({ todos: t })}
+        fields={TODO_FIELDS} addLabel="+ Lägg till punkt" summary={todoSummary} empty="Inget att göra just nu." />
+      {opts && (
+        <label style={{ fontSize: 13, display: "block", marginTop: 12 }}>
+          <input type="checkbox" disabled={ro} checked={opts.sec("decisions").todos !== false}
+            onChange={(e) => opts.setSec("decisions", { todos: e.target.checked })} /> Ta med att göra-listan i PDF:en
+        </label>
+      )}
+    </div>
+  );
 }
 
 // ---------- Bilagor: private PDFs in vs-docs. space.attachments = [{ id, title, path, size, on }] ----------

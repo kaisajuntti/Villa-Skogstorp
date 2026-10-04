@@ -9,7 +9,7 @@ import { canEdit } from "../config.js";
 const rid = () => Math.random().toString(36).slice(2, 9);
 
 // Compact list of records; tap a row to edit it as a card.
-// `fields` = [{ k, label, wide?, multi?, type? }], `summary(r)` = collapsed rendering.
+// `fields` = [{ k, label, wide?, multi?, type?, options? }] (options = select), `summary(r)` = collapsed rendering.
 export function RowList({ rows, onChange, fields, addLabel, empty, summary }) {
   const ro = !canEdit();
   const [open, setOpen] = useState(null); // id of the expanded row
@@ -40,7 +40,11 @@ export function RowList({ rows, onChange, fields, addLabel, empty, summary }) {
             {fields.map((f) => (
               <label key={f.k} style={{ fontSize: 12, gridColumn: f.wide ? "1 / -1" : undefined }}>
                 <div className="sub" style={{ margin: "0 0 3px" }}>{f.label}</div>
-                {f.multi ? (
+                {f.options ? (
+                  <select value={r[f.k] || f.options[0]} disabled={ro} onChange={(e) => set(i, f.k, e.target.value)}>
+                    {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : f.multi ? (
                   <textarea value={r[f.k] || ""} readOnly={ro} style={{ minHeight: 60 }}
                     onChange={ro ? undefined : (e) => set(i, f.k, e.target.value)} />
                 ) : (

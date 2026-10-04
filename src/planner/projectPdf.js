@@ -287,10 +287,23 @@ function renderTech(W, P, n, title) {
 
 function renderDecisions(W, P, n, title) {
   const list = P.decisions || [];
-  if (!list.length) return false;
+  const todos = (P.pdf.decisions || {}).todos !== false ? P.todos || [] : [];
+  if (!list.length && !todos.length) return false;
   W.h1(n, title);
-  W.table([{ label: "Datum", w: 20 }, { label: "Område", w: 28 }, { label: "Beslut", w: 62 }, { label: "Motivering" }],
-    list.map((d) => [d.date, d.area, d.decision, d.why]), { size: 9 });
+  const sub = (k, t) => `${n ? n + "." : ""}${k}  ${t}`;
+  if (list.length) {
+    W.h2(sub(1, "Fattade beslut"));
+    W.table([{ label: "Datum", w: 20 }, { label: "Område", w: 28 }, { label: "Beslut", w: 62 }, { label: "Motivering" }],
+      list.map((d) => [d.date, d.area, d.decision, d.why]), { size: 9 });
+  }
+  if (todos.length) {
+    const order = { "Öppen": 0, "Pågår": 1, "Klar": 2 };
+    const rows = todos.map((t, i) => ({ t, i })).sort((a, b) => (order[a.t.status || "Öppen"] - order[b.t.status || "Öppen"]) || a.i - b.i);
+    W.ensure(40);
+    W.h2(sub(list.length ? 2 : 1, "Att besluta / att göra"), `${todos.filter((t) => (t.status || "Öppen") !== "Klar").length} öppna`);
+    W.table([{ label: "Status", w: 16 }, { label: "Område", w: 26 }, { label: "Vad" }, { label: "Ansvarig", w: 26 }, { label: "Senast", w: 20 }],
+      rows.map(({ t }) => ({ cells: [t.status || "Öppen", t.area, (t.item || "") + (t.detail ? "\n" + t.detail : ""), t.who, t.due], muted: t.status === "Klar" })), { size: 8.8 });
+  }
   return true;
 }
 
@@ -640,7 +653,7 @@ function renderAttachments(W, atts, n, title) {
 // ---------- main ----------
 export const SECTION_TITLES = {
   cover: "Försättsblad", contacts: "Kontakter & roller", chapters: "Projektbeskrivning", tech: "Tekniska val",
-  decisions: "Beslutslogg", budget: "Arbetsplan & budget", floors: "Våningar & utrymmen", colors: "Färgschema", attachments: "Bilagor",
+  decisions: "Beslutslogg & att göra", budget: "Arbetsplan & budget", floors: "Våningar & utrymmen", colors: "Färgschema", attachments: "Bilagor",
 };
 
 export async function buildProjectPdf({ project, ids, filename, onProgress }) {

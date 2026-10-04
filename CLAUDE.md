@@ -127,6 +127,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   PDF, wired in step 2): 1 Försättsblad (`cover` + cover image) · 2 Kontakter · 3 Projektbeskrivning (`chapters:[{id,title,
   text,photos:[{id,photo?,path?,ref?,caption}]}]` — `ref` = private drawing bg key, e.g. `floor-plan1`,
   `doc-bygglov-fasad-soder`; + project `inspo`) · 4 Tekniska val · 5 Beslutslogg (`decisions:[{id,date,area,decision,why}]`)
+  + part 2 **Att besluta / att göra** (`todos:[{id,area,item,detail,who,due,status: Öppen|Pågår|Klar}]`, in the PDF unless
+  `pdf.decisions.todos === false`; seeded 2026-10-04 with startbesked requirements from the bygglovsbeslut)
   · 6 Arbetsplan & budget (LINKED from Budget: etapper, views, detail, prices on/off) · 7 Våningar & utrymmen (LINKED:
   per floor overview on/off, per utrymme on/off + detail full|compact, inspo on/off) · 8 Färgschema · 9 Bilagor
   (`attachments:[{id,title,path,size,type,on}]`, private bucket **vs-docs**, `uploadDoc/signedDocUrl/deleteDoc` in photos.js).
@@ -337,6 +339,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Tilluft via fönsterventiler (beställs med fönstren) + uteluftsdon bakom radiatorer i sovrummen. Inget don i gymmet,
   ingen extern kaminluft (för nu). Ingen murstock/fundament i källaren – prefab lättskorsten. Ritningar:
   `public/plans/ventilation/*.jpg`, länkade i Projekt → Dokument.
+- **Bergvärmepump: inverterstyrd, 0–16 kW** (rättat 2026-10-04 från ~12 kW; budget 115 000 kr inkl. VVB). Borrdjup 200 m i
+  budgeten – med 16 kW och ~300 m² kan det behövas 250–300 m (låt borrfirman räkna; står i att göra-listan).
 - **El (beslutat 2026-10)**: elcentral i **städ plan 1** (tillbyggnaden), kablar ner till teknikrummet via S1 (ingen
   undercentral). Smart belysning = **Plejd** (trådlösa dimrar i vanliga dosor, även i befintligt hus) – grovinstallationen
   ska ha **nolla till alla brytardosor + djupa dosor**. Med i budget: nätverk CAT6, sammankopplade brandvarnare, utebelysning.

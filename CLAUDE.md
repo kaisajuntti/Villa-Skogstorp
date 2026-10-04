@@ -193,6 +193,15 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Röda dagar 2027 (6/1, 26/3, 29/3, 6/5, 25/6) räknas bort. Garage/friggebod/terrass flyttade till etapp 2;
   rivning av friggebod + carport ligger kvar i etapp 1. Matjord bakom tillbyggnaden läggs i etapp 1
   (maskin når inte dit efteråt).
+- **Tidsplan v2 (beslutat 2026-10-04): mål KLART/BEBOELIGT 31 maj 2027**, juni = buffert, inflytt jul–aug.
+  Omlott mellan husdelarna: Renovering befintlig startar när snickarna är klara i tillbyggnaden (plattsättaren
+  avslutar där). Målning i två omgångar: **omg. 1** (feb, spackel + grund + 1:a strykning, före parkett/kök) och
+  **omg. 2 (pMAL2, slutet apr–maj)** = målarens väderjobb: ute linoljefärg när torrt/varmt, inne (slutstrykning +
+  linoljefärg på snickerier) när det regnar. **Linoljefärg utvändigt** (panel/foder levereras grundade med linolja).
+  **Terrass + mark bakom huset (pTER, apr–maj) flyttad till etapp 1** – sista maskinjobbet bakom huset (maskin når inte
+  dit när terrassen är byggd); natursten, granitplattor, blocksteg, **inga räcken**. Scheman räknas med `sched2.py`
+  (scratch) – fönster: Utvändigt ≥15 mars, terrass ≥19 april, pMAL2 ≥26 april. Etapp 2: trädgård aug 2027 (efter
+  inflytt), garage/friggebod-grund hösten 2027 (inte bråttom), friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
   (i dag aggregerad per benämning + enhet, sorterad på kr).

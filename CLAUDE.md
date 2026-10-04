@@ -200,8 +200,10 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   slutstrykningar + linolja på snickerier, ej väderberoende) när det passar, ute linoljemålning när vädret tillåter (maj). **Linoljefärg utvändigt** (panel/foder levereras grundade med linolja).
   **Terrass + mark bakom huset (pTER, apr–maj) flyttad till etapp 1** – sista maskinjobbet bakom huset (maskin når inte
   dit när terrassen är byggd); natursten, granitplattor, blocksteg, **inga räcken**. Scheman räknas med `sched2.py`
-  (scratch) – fönster: Utvändigt ≥15 mars, terrass ≥19 april, pMAL2 ≥26 april. Etapp 2: **trädgård september 2027** (efter inflytt): **färdiggräs i september** (svalt/regn, slipper
-  sommarvattning och vattningsförbud), plantering, utebelysning, garage/friggebod-grund hösten 2027 (inte bråttom), friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
+  (scratch) – Utvändigt direkt efter Inredning (~1 mars), **grund garage + friggebod (pGARG) flyttad från etapp 2 till
+  ~30 mars–1 april** (tjälfri mark, fyller snickarhålet), terrass ≥12 april (natursten ligger i terrassfasen),
+  målarens flexibla fönster mars–maj. Etapp 2: **trädgård september 2027** (efter inflytt): **färdiggräs i september** (svalt/regn, slipper
+  sommarvattning och vattningsförbud), plantering, utebelysning, friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
 - **Maskinschema (beslutat 2026-10-04)** – maskinen ska inte stå still: p0 (15–26 okt) steg 1–3 gårdsplan/runt källaren/
   schakt källare → **pMASK** (parallellt med grunden 27 okt–12 nov) steg 4–7: trädgård grovplanering med egna massor,
   matjord i **upplag**, terrass bilning + schakt, höjden bakom terrassen, garage schakt + bärlager (= upplagsplats under

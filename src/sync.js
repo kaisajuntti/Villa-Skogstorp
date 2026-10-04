@@ -48,9 +48,10 @@ export async function testConnection(cfg) {
   return true;
 }
 
-export async function pullAll(cfg) {
+export async function pullAll(cfg, since) {
   const r = await fetch(
-    `${base(cfg)}/vs_items?select=kind,key,data,updated_at,updated_by&workspace=eq.${enc(cfg.workspace)}`,
+    `${base(cfg)}/vs_items?select=kind,key,data,updated_at,updated_by&workspace=eq.${enc(cfg.workspace)}` +
+    (since ? `&updated_at=gt.${enc(since)}` : ""),
     { headers: await headers() }
   );
   if (!r.ok) throw new Error("pull HTTP " + r.status);

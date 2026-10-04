@@ -61,7 +61,11 @@ vs:v1:config         { url, key, workspace, user }   // sync config, LOCAL ONLY,
 vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for merge
 ```
 
-- `storage.js` is an async facade over localStorage. When a sync config is present it also
+- `storage.js` is an async facade over localStorage — **except big values (`vs:v1:bg:*` images) which live in
+  IndexedDB** (+ memory cache; `migrateBigKeys` moves old ones out of localStorage). Safari caps localStorage at ~5 MB
+  and the images exceeded it (2026-10-04: sync aborted → Våningar empty on iPad). Pulls are **incremental**
+  (`vs:v1:_lastpull` = newest server updated_at; `updated_at=gt.(last − 10 min)`), first pull is full.
+- (orig.) `storage.js` is an async facade over localStorage. When a sync config is present it also
   pushes each write to Supabase and `syncPull()` merges remote rows back in.
 - Debounced auto-save; save status shown in planner header.
 - Export/import: JSON dump of all `vs:v1:*` keys (still available as manual backup).

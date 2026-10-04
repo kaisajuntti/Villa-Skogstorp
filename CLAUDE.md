@@ -92,6 +92,29 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   lists snapshots with Restore. Restore pushes the chosen data as current (which snapshots
   the current state first). Sync-only feature (versions live in Supabase).
 
+### Inloggning & säkerhet (Supabase Auth, 2026-10)
+- The old SHA-256 password gate (`Lock.jsx`, VIEW/EDIT hashes) is **replaced** by real Supabase Auth
+  (email + password): `src/auth.js` (REST login/refresh/logout, session in `vs:v1:session`,
+  `authHeaders()` = publishable apikey + user's access token), `src/pages/Login.jsx`, nav "Logga ut".
+- Access level = `app_metadata.access` ('edit' | 'view', set by admin via SQL — users can't change it);
+  anything else = read-only in the UI and **no access at all** in RLS.
+- RLS SQL in `supabase/`: `01_auth.sql` (vs_access() helper, authenticated policies, vs-photos
+  insert/delete for 'edit', **private bucket `vs-docs`** for sensitive docs — signed URLs) and
+  `02_lockdown.sql` (drops the old anon policies; run only after every device has logged in).
+  Public signups must be **off** (Authentication → Sign In / Providers).
+- **Sensitive material (kontrakt, KA-handlingar, kontakter/personuppgifter) never goes in the repo or
+  `public/`** — the repo is public. It lives in Supabase (`vs-docs` / space records) behind login.
+- **Claude administers Supabase** (the owner does not want to click in the dashboard): a Supabase personal
+  access token in the environment variable `SUPABASE_ACCESS_TOKEN` (cloud environment settings, never in
+  chat/repo). `scripts/vsapi.py` uses it for SQL (`sql()`, Management API), the server key (data scripts,
+  bypasses RLS) and user admin. Accounts: **one per person** (Claude creates them on request via the Auth
+  admin API, auto-confirmed, `app_metadata.access` = 'edit' or 'view').
+- **Rollout status (2026-10-04) — "säkerhetsutrullningen":** the login CODE (auth.js, Login.jsx, sync/photos
+  token headers) is on branch `claude/villa-skogstorp-budget-x532jh`, NOT on main yet (merging it before accounts
+  exist would lock everyone out). Check that `SUPABASE_ACCESS_TOKEN` is set, then work from that branch.
+  Order: disable signups → create accounts → run `01_auth.sql` → merge to main → owner logs in on
+  devices → run `02_lockdown.sql`.
+
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),
   not in the jsonb store — see `src/photos.js` (`uploadPhoto`/`deletePhoto`/`photoUrl`).

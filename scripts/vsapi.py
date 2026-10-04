@@ -1,8 +1,9 @@
 """Tiny Supabase client for maintenance scripts (budget edits etc.).
 
-Logs in as a dedicated Supabase Auth user. Credentials come from the
-environment — never commit them:
-    VS_EMAIL, VS_PASSWORD
+Credentials come from the environment — never commit them. Either:
+    SUPABASE_ACCESS_TOKEN  (personal access token, sbp_…): fetches the project's
+                           server key via the Management API (bypasses RLS), or
+    VS_EMAIL, VS_PASSWORD  (a Supabase Auth user with access 'edit').
 Usage:
     from vsapi import get, put
     row = get("budget")            # {data, updated_at, updated_by}
@@ -26,6 +27,33 @@ def _req(path, data=None, method=None, headers=None):
         return resp.status, (json.loads(body) if body else None)
 
 
+REF = URL.split("//")[1].split(".")[0]
+_server = None
+
+
+def server_key():
+    """Project secret/service key via the Management API (needs SUPABASE_ACCESS_TOKEN)."""
+    global _server
+    if _server is None:
+        pat = os.environ["SUPABASE_ACCESS_TOKEN"]
+        r = urllib.request.Request(f"https://api.supabase.com/v1/projects/{REF}/api-keys?reveal=true",
+                                   headers={"Authorization": "Bearer " + pat})
+        keys = json.load(urllib.request.urlopen(r))
+        k = next((k for k in keys if k.get("type") == "secret"), None) or \
+            next(k for k in keys if k.get("name") == "service_role")
+        _server = k["api_key"]
+    return _server
+
+
+def sql(query):
+    """Run SQL on the project database (Management API, needs SUPABASE_ACCESS_TOKEN)."""
+    r = urllib.request.Request(f"https://api.supabase.com/v1/projects/{REF}/database/query",
+                               data=json.dumps({"query": query}).encode(), method="POST",
+                               headers={"Authorization": "Bearer " + os.environ["SUPABASE_ACCESS_TOKEN"],
+                                        "Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(r))
+
+
 def token():
     global _token
     if _token is None:
@@ -40,6 +68,12 @@ def token():
 
 
 def H():
+    if os.environ.get("SUPABASE_ACCESS_TOKEN"):
+        k = server_key()
+        h = {"apikey": k, "Content-Type": "application/json"}
+        if k.startswith("eyJ"):  # legacy service_role JWT
+            h["Authorization"] = "Bearer " + k
+        return h
     return {"apikey": KEY, "Authorization": "Bearer " + token(), "Content-Type": "application/json"}
 
 

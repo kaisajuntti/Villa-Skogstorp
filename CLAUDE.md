@@ -104,8 +104,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Public signups must be **off** (Authentication → Sign In / Providers).
 - **Sensitive material (kontrakt, KA-handlingar, kontakter/personuppgifter) never goes in the repo or
   `public/`** — the repo is public. It lives in Supabase (`vs-docs` / space records) behind login.
-- Maintenance scripts use `scripts/vsapi.py` (login with `VS_EMAIL`/`VS_PASSWORD` from the
-  environment — a dedicated 'edit' user; never commit credentials).
+- **Claude administers Supabase** (the owner does not want to click in the dashboard): a Supabase personal
+  access token in the environment variable `SUPABASE_ACCESS_TOKEN` (cloud environment settings, never in
+  chat/repo). `scripts/vsapi.py` uses it for SQL (`sql()`, Management API), the server key (data scripts,
+  bypasses RLS) and user admin. Accounts: **one per person** (Claude creates them on request via the Auth
+  admin API, auto-confirmed, `app_metadata.access` = 'edit' or 'view').
+- **Rollout status (2026-10-04):** code on branch `claude/villa-skogstorp-budget-x532jh`, NOT on main yet.
+  Order: disable signups → create accounts → run `01_auth.sql` → merge to main → owner logs in on
+  devices → run `02_lockdown.sql`.
 
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),

@@ -282,6 +282,7 @@ export default function RoomPlanner({ storageKey, title }) {
 
   // ---------- wall hit test ----------
   const hitWall = (p) => {
+    if (room.frame === false) return null;
     const tol = WALL + 150;
     if (p.x >= -150 && p.x <= room.w + 150) {
       if (p.y >= -tol && p.y <= 150) return { wall: "N", d: clamp(p.x, 0, room.w) };
@@ -1041,6 +1042,10 @@ export default function RoomPlanner({ storageKey, title }) {
               style={{ width: 90, fontFamily: mono, fontSize: 14, padding: 6, border: `1.5px solid ${ink}`, borderRadius: 8 }} /> mm
           </label>
           <span style={{ fontSize: 12, color: "#7A756E" }}>= {((room.w * room.l) / 1e6).toFixed(1)} m²</span>
+          <label style={{ fontSize: 13 }}>
+            <input type="checkbox" checked={room.frame !== false}
+              onChange={(e) => { pushUndo(); setRoom((r) => ({ ...r, frame: e.target.checked ? undefined : false })); }} /> Rumsväggar (rektangel)
+          </label>
         </div>
       )}
 
@@ -1199,12 +1204,12 @@ export default function RoomPlanner({ storageKey, title }) {
             </g>
           )}
 
-          {/* corner blocks */}
-          {[[-WALL, -WALL], [room.w, -WALL], [-WALL, room.l], [room.w, room.l]].map((c, i) => (
+          {/* corner blocks (room frame; off when the utrymme is drawn with freeform walls only) */}
+          {room.frame !== false && [[-WALL, -WALL], [room.w, -WALL], [-WALL, room.l], [room.w, room.l]].map((c, i) => (
             <rect key={i} x={c[0]} y={c[1]} width={WALL} height={WALL} fill={ink} />
           ))}
           {/* wall segments */}
-          {["N", "S", "W", "E"].flatMap((w) => wallSegs(w).map((s, i) => (
+          {room.frame !== false && ["N", "S", "W", "E"].flatMap((w) => wallSegs(w).map((s, i) => (
             <rect key={w + i} x={s.x} y={s.y} width={s.w} height={s.h} fill={ink} />
           )))}
 
@@ -1247,12 +1252,12 @@ export default function RoomPlanner({ storageKey, title }) {
           )}
 
           {/* overall dims */}
-          <g fontFamily={mono} fontSize="130" fill={blue} style={{ pointerEvents: "none" }}>
+          {room.frame !== false && <g fontFamily={mono} fontSize="130" fill={blue} style={{ pointerEvents: "none" }}>
             <line x1={0} y1={-WALL - 220} x2={room.w} y2={-WALL - 220} stroke={blue} strokeWidth="12" />
             <text x={room.w / 2 - 150} y={-WALL - 270}>{room.w}</text>
             <line x1={-WALL - 220} y1={0} x2={-WALL - 220} y2={room.l} stroke={blue} strokeWidth="12" />
             <text x={-WALL - 270} y={room.l / 2} transform={`rotate(-90 ${-WALL - 270} ${room.l / 2})`}>{room.l}</text>
-          </g>
+          </g>}
 
           {/* openings */}
           <g style={{ pointerEvents: mode === "mat" ? "none" : undefined }}>

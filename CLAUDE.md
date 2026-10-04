@@ -120,6 +120,21 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - Next (step 2 cont.): våning + ordning per rum, projektbeskrivning/kapitel, bilagor (PDF → `vs-docs`),
   beslutslogg; then step 3 = new project PDF.
 
+### Våningar & utrymmen (2026-10)
+- New concept **utrymme** = one entry in `vs:v1:rooms` that may cover several rooms. 12 utrymmen drawn from the
+  bygglov rev 2026-06-16 (ids `u-k-*`, `u-p1-*`, `u-p2-*`, names prefixed "K ·", "P1 ·", "P2 ·"): K Nya/Gamla källaren;
+  P1 Gästrum, Tvätt, Arbetsrum, Entré/hallar/WC/städ/trapphall, Vardagsrum & matsal, Kök; P2 Sovrum & WC/D,
+  Allrum/rum/trapphall, Master bedroom/walk-in/bathroom, Balkong. The old rooms are kept (to be deleted by the owner later).
+- Each has the architect drawing as background (exact scale, ±2.5 m, opacity 0.3) and walls/doors/windows auto-traced
+  (`scripts/floorplans/`). **`room.frame === false`** = no rectangle room walls, only freeform walls (checkbox
+  "Rumsväggar (rektangel)" in Rum mode). Kök + Master = the owner's own drawings (moved kitchen wall, garderober)
+  with the new background; Entré got the hall part of the kitchen drawing.
+- Owner decisions: walk-in closets on P2 removed → garderober in the niche, one door per sovrum; farstukvisten at the
+  main entrance is demolished; "balkong liten" doesn't exist (it is the roof of the kitchen farstukvist).
+- **Planner save rule (bug fix 2026-10-04):** the planner saves only after a real user edit on that device
+  (`editedRef`); loading/sync never writes back (it used to overwrite newer remote data with a stale local copy).
+- Next: floor view (Källare · Plan 1 · Plan 2) with clickable utrymme polygons from `floors.py`.
+
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),
   not in the jsonb store — see `src/photos.js` (`uploadPhoto`/`deletePhoto`/`photoUrl`).

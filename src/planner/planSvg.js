@@ -144,9 +144,10 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
     const rot = bgT.rot ? ` transform="rotate(${bgT.rot} ${bgT.x + bgW / 2} ${bgT.y + bgH / 2})"` : "";
     s += `<g opacity="${bgT.opacity ?? 0.5}"${rot}><image href="${bgImg.dataUrl}" x="${bgT.x}" y="${bgT.y}" width="${bgW}" height="${bgH}" preserveAspectRatio="none"/></g>`;
   }
-  for (const [cx, cy] of [[-WALL, -WALL], [room.w, -WALL], [-WALL, room.l], [room.w, room.l]])
+  const frame = room.frame !== false;
+  if (frame) for (const [cx, cy] of [[-WALL, -WALL], [room.w, -WALL], [-WALL, room.l], [room.w, room.l]])
     s += `<rect x="${cx}" y="${cy}" width="${WALL}" height="${WALL}" fill="${ink}"/>`;
-  for (const w of ["N", "S", "W", "E"])
+  if (frame) for (const w of ["N", "S", "W", "E"])
     for (const seg of wallSegs(w, room, openings))
       s += `<rect x="${seg.x}" y="${seg.y}" width="${seg.w}" height="${seg.h}" fill="${ink}"/>`;
   for (const w of walls) {
@@ -169,7 +170,7 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
       s += `<rect x="${v[0] - T / 2}" y="${v[1] - T / 2}" width="${T}" height="${T}" fill="${ink}"/>`;
     }
   }
-  s += `<g font-family="${mono}" font-size="130" fill="${blue}">` +
+  if (frame) s += `<g font-family="${mono}" font-size="130" fill="${blue}">` +
     `<line x1="0" y1="${-WALL - 220}" x2="${room.w}" y2="${-WALL - 220}" stroke="${blue}" stroke-width="12"/>` +
     `<text x="${room.w / 2 - 150}" y="${-WALL - 270}">${room.w}</text>` +
     `<line x1="${-WALL - 220}" y1="0" x2="${-WALL - 220}" y2="${room.l}" stroke="${blue}" stroke-width="12"/>` +

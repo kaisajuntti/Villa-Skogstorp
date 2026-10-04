@@ -135,7 +135,17 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - Bygglov sheets (situationsplan, 4 fasader, sektioner, terrass, garage, 2 vyer) stored privately as `vs:v1:bg:doc-bygglov-*`
   and listed in `space:floors.sheets`; the full bygglov PDF is attachment A in vs-docs. Chapters 1–5 + 23 decisions seeded
   by Claude as drafts ("[Utkast …]"). **No colours/finishes are decided** — never write inspo colours into Färger.
-- Next = step 2: the new PDF generator (whole + per section) incl. pdf-lib merge of attachments.
+- **PDF generator (step 2, 2026-10-04)** `src/planner/projectPdf.js` (lazy-loaded) `buildProjectPdf({ project, ids })`:
+  "Skapa PDF" = all sections with "I PDF" on, in PDF order; each section's "⬇ PDF" = that section alone. Cover (+ cover
+  image) → Innehåll (TOC with page numbers + links, sections renumbered 1… among those included) → sections. Empty
+  sections are skipped. Budget: per etapp summary figures, per fas (sums | rows | rows + material lines), material totalt,
+  per yrke, leveranser, Gantt on a landscape page; `prices:false` hides every amount. Våningar: floor overview (floor image
+  + tints + labels drawn on canvas) then each utrymme — full = `addRoomPages` (the room 3-pager), compact = 1 page — +
+  its inspo grid. Bilagor: fetched via signed URL before rendering (page counts known), "Bilaga A" divider page, then
+  **pdf-lib** inserts the attachment's pages after its divider. Footer "n / N" on every page but the cover.
+  Budget arithmetic is shared in **`src/budgetCalc.js`** (`computeBudget`) — Budget page, Projekt summary and PDF.
+  **jsPDF fonts = Windows-1252 only**: one char outside it (≈ → ✓ emoji) garbles the whole line, so `newDoc()` (pdf.js)
+  patches text/splitTextToSize/getTextWidth to run `clean()` — always create docs via `newDoc()`.
 
 ### Våningar & utrymmen (2026-10)
 - New concept **utrymme** = one entry in `vs:v1:rooms` that may cover several rooms. 12 utrymmen drawn from the

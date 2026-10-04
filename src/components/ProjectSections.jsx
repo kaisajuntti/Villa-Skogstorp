@@ -9,6 +9,7 @@ import { useSpace } from "../state.js";
 import { uploadPhoto, deletePhoto, uploadDoc, signedDocUrl, deleteDoc } from "../photos.js";
 import { RowList } from "./ProjectInfo.jsx";
 import { InspoLightbox } from "./Spaces.jsx";
+import { computeBudget } from "../budgetCalc.js";
 
 const rid = () => Math.random().toString(36).slice(2, 9);
 const muted = { color: "var(--muted)", fontSize: 13 };
@@ -22,7 +23,7 @@ export function usePdfOpts(space, update) {
 }
 
 // ---------- Section shell: number, title, summary, "Med i PDF", "⬇ PDF", collapsible body ----------
-export function Section({ n, id, title, summary, opts, children, defaultOpen = false, onPdf }) {
+export function Section({ n, id, title, summary, opts, children, defaultOpen = false, onPdf, busy }) {
   const ro = !canEdit();
   const [open, setOpen] = useState(defaultOpen);
   const s = opts.sec(id);
@@ -37,8 +38,8 @@ export function Section({ n, id, title, summary, opts, children, defaultOpen = f
         <label onClick={(e) => e.stopPropagation()} style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
           <input type="checkbox" checked={!!s.on} disabled={ro} onChange={(e) => opts.setSec(id, { on: e.target.checked })} /> I PDF
         </label>
-        <button className="btn small" onClick={(e) => { e.stopPropagation(); onPdf?.(id); }} disabled={!onPdf}
-          title={onPdf ? "Skapa PDF för bara detta avsnitt" : "PDF-generatorn byggs i nästa steg"}>⬇ PDF</button>
+        <button className="btn small" onClick={(e) => { e.stopPropagation(); onPdf?.(id); }} disabled={!onPdf || !!busy}
+          title="Skapa PDF för bara detta avsnitt">{busy === id ? "…" : "⬇ PDF"}</button>
         <span style={{ color: "var(--muted)", width: 14, textAlign: "center" }}>{open ? "▾" : "▸"}</span>
       </div>
       {open && <div style={{ padding: "0 14px 14px", borderTop: "1px solid var(--line)" }}><div style={{ height: 12 }} />{children}</div>}
@@ -247,19 +248,7 @@ export function Attachments({ space, update }) {
 }
 
 // ---------- Linked: Arbetsplan & budget ----------
-const num = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
-const lineAmt = (l) => { const q = num(l.qty); return q ? q * num(l.price) : num(l.price); };
-function budgetTotal(b) {
-  if (!b?.items) return null;
-  const rate = Object.fromEntries((b.rates || []).map((r) => [r.typ, num(r.rate)]));
-  let t = 0;
-  for (const it of b.items) {
-    const m = Array.isArray(it.mat) && it.mat.length ? it.mat.reduce((s, l) => s + lineAmt(l), 0) : (num(it.qty) ? num(it.qty) * num(it.estUnit) : num(it.estUnit));
-    const w = (it.work || []).reduce((s, x) => s + num(x.h) * (rate[x.typ] || 0), 0);
-    t += m + num(it.ext) + w;
-  }
-  return t;
-}
+const budgetTotal = (b) => (b?.items ? computeBudget(b).total : null);
 const tkr = (n) => (n == null ? "–" : new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n / 1000)) + " tkr");
 export const BUDGET_VIEWS = [
   ["summary", "Sammanfattning (totaler, per byggnad)"],
@@ -357,25 +346,25 @@ export function FloorsRoomsOptions({ opts, rooms }) {
 }
 
 // ---------- Skapa PDF: checklist ----------
-export function PdfBuilder({ opts, sections, onBuild }) {
+export function PdfBuilder({ opts, sections, onBuild, busy, status }) {
   const ro = !canEdit();
+  const n = sections.filter(([id]) => opts.sec(id).on).length;
   return (
     <div className="card" style={{ padding: 14, marginBottom: 12, background: "#fff" }}>
       <div style={{ fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", fontSize: 14, marginBottom: 8 }}>⬇ Skapa projekt-PDF</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 4, marginBottom: 10 }}>
-        {sections.map(([id, n, title]) => (
+        {sections.map(([id, num, title]) => (
           <label key={id} style={{ fontSize: 13.5 }}>
-            <input type="checkbox" disabled={ro} checked={opts.sec(id).on} onChange={(e) => opts.setSec(id, { on: e.target.checked })} /> {n}. {title}
+            <input type="checkbox" disabled={ro} checked={opts.sec(id).on} onChange={(e) => opts.setSec(id, { on: e.target.checked })} /> {num}. {title}
           </label>
         ))}
       </div>
       <div className="row" style={{ gap: 8 }}>
         <input type="text" disabled={ro} value={opts.pdf.filename || ""} placeholder="Filnamn, t.ex. Villa Skogstorp – projekt"
           onChange={(e) => opts.setPdf({ filename: e.target.value })} style={{ flex: 1, minWidth: 200 }} />
-        <button className="btn primary" disabled={!onBuild} onClick={onBuild}
-          title={onBuild ? "" : "PDF-generatorn byggs i nästa steg"}>Skapa PDF</button>
+        <button className="btn primary" disabled={!!busy || !n} onClick={onBuild}>{busy === "all" ? "Skapar …" : "Skapa PDF"}</button>
       </div>
-      {!onBuild && <p className="sub" style={{ margin: "8px 0 0" }}>Valen sparas redan – själva PDF-generatorn kommer i nästa steg.</p>}
+      {status && <p className="sub" style={{ margin: "8px 0 0", color: status.startsWith("Fel") ? "var(--red)" : undefined }}>{status}</p>}
     </div>
   );
 }

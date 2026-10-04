@@ -3,6 +3,7 @@ import { useSpace, useRooms } from "../state.js";
 import { spaceKey } from "../storage.js";
 import { canEdit } from "../config.js";
 import VersionHistory from "../components/VersionHistory.jsx";
+import { DELAR, delOrder, DEFAULT_RATES, LEGACY_TYP, parseNum, lineAmt, matLines, est, legacyH, addWorkdays } from "../budgetCalc.js";
 
 // Budget lives in its own space record → syncs + versions like the rest.
 // Etapp 1 (huset, fram till inflytt) = space:budget · Etapp 2 (efter inflytt) = space:budget2.
@@ -17,32 +18,11 @@ const DEFAULT_PHASES = [
 const OVERGRIP = "Övergripande";
 // "Del" = byggdel/moment (free text). These are just suggestions in a datalist —
 // you can type anything ("Kök", "Trädäck", …). Used for sub-headers within a group.
-const DELAR = ["Mark", "Stomme", "Golv", "Dränering", "Yttervägg", "Innervägg", "Trappa", "Fönster", "Dörrar", "Fasad", "Tak", "Golvbeklädnad", "Väggbeklädnad", "VVS", "Ventilation", "El", "Övrigt"];
 const NODEL = "Ej angiven del";
-const delOrder = (d) => { const i = DELAR.indexOf(d); return i < 0 ? DELAR.length : i; };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const parseNum = (v) => { const n = parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n)) + " kr";
-// Material line: mängd × á-pris (or á-pris as lump when mängd is blank).
-const lineAmt = (l) => { const q = parseNum(l.qty); return q ? q * parseNum(l.price) : parseNum(l.price); };
-const matLines = (it) => (Array.isArray(it.mat) && it.mat.length ? it.mat : null);
-// Material for a row: sum of its material lines (`mat`), else the single qty × estUnit.
-const est = (it) => { const m = matLines(it); if (m) return m.reduce((s, l) => s + lineAmt(l), 0); const q = parseNum(it.qty); return q ? q * parseNum(it.estUnit) : parseNum(it.estUnit); };
-// Legacy labour rows (category Arbete, unit "timmar", á-pris = kr/h) count as Snickare hours.
-const legacyH = (it) => (it.category === "Arbete" && /tim/i.test(it.unit || "") ? parseNum(it.qty) : 0);
 const hFmt = (h) => (Math.round(h) + " h");
-// Yrken: timpris + bemanning (antal personer). Stored on the record as `rates`.
-const DEFAULT_RATES = [
-  { typ: "Snickare", rate: "580", crew: "3" },
-  { typ: "Maskinist", rate: "1000", crew: "1" },
-  { typ: "Elektriker", rate: "625", crew: "1" },
-  { typ: "VVS", rate: "625", crew: "1" },
-];
-const LEGACY_TYP = "Snickare";
-// Working days: Mon–Fri, skipping jullov 22 Dec – 4 Jan.
-const isWork = (d) => { const w = d.getDay(), m = d.getMonth(), day = d.getDate(); return w > 0 && w < 6 && !((m === 11 && day >= 22) || (m === 0 && day <= 4)); };
-const addWorkdays = (start, n) => { const d = new Date(start); while (!isWork(d)) d.setDate(d.getDate() + 1); for (let i = 1; i < n; i++) { d.setDate(d.getDate() + 1); while (!isWork(d)) d.setDate(d.getDate() + 1); } return d; };
 const TYP_COLORS = ["#5A7A8C", "#8C6A3F", "#5E8C5A", "#9a4a3a", "#7A5A8C", "#3F7F8C", "#8C8C3F"];
 
 const cell = { padding: "4px 6px", fontSize: 12.5 };

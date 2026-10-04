@@ -8,18 +8,38 @@ const A4 = { w: 210, h: 297 };
 const M = 14;
 const CW = A4.w - 2 * M;
 const INK = [51, 49, 46], BLUE = [90, 122, 140], MUTED = [122, 117, 110], LINE = [214, 208, 198], SOFT = [246, 243, 237], TXT = [70, 66, 62];
-const titleCase = (s) => String(s || "").toLowerCase().replace(/(^|\s|-)([a-zåäö])/g, (_, a, b) => a + b.toUpperCase());
+// ALL-CAPS names ("KÖK") are title-cased; names already in mixed case are kept as written.
+export const titleCase = (s) => {
+  const str = String(s || "");
+  return str === str.toUpperCase() ? str.toLowerCase().replace(/(^|\s|-)([a-zåäö])/g, (_, a, b) => a + b.toUpperCase()) : str;
+};
 
-const safe = (s) => (String(s || "plan").replace(/[^\w\-åäöÅÄÖ ]+/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "plan");
+// The built-in PDF fonts only cover Windows-1252. One character outside it (≈, →, emoji …)
+// makes jsPDF encode the whole string as UTF-16 and the line turns to garbage — so every
+// string is mapped/stripped first. newDoc() patches a jsPDF instance to do this everywhere.
+const CP1252 = new Set("€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ");
+const MAP = { "≈": "ca", "→": "->", "←": "<-", "⇄": "<->", "✓": "x", "✔": "x", "≥": ">=", "≤": "<=", "−": "-", "‑": "-", "\u202f": " ", "\u2009": " ", "\u2007": " ", "\u200b": "" };
+export const clean = (s) => String(s ?? "").replace(/[^\x00-\xff]/g, (c) => MAP[c] ?? (CP1252.has(c) ? c : ""));
+export function newDoc(opts = {}) {
+  const doc = new jsPDF({ unit: "mm", format: "a4", ...opts });
+  const c = (t) => (Array.isArray(t) ? t.map(clean) : clean(t));
+  for (const fn of ["text", "splitTextToSize", "getTextWidth", "textWithLink"]) {
+    const orig = doc[fn].bind(doc);
+    doc[fn] = (t, ...a) => orig(c(t), ...a);
+  }
+  return doc;
+}
 
-function hexToRgb(hex) {
+export const safe = (s) => (String(s || "plan").replace(/[^\w\-åäöÅÄÖ ]+/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "plan");
+
+export function hexToRgb(hex) {
   const h = String(hex || "#000000").replace("#", "");
   const n = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
   const int = parseInt(n || "0", 16);
   return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
 }
 
-function loadImg(src) {
+export function loadImg(src) {
   return new Promise((resolve, reject) => {
     const im = new Image();
     im.onload = () => resolve(im);
@@ -31,7 +51,7 @@ function loadImg(src) {
 // Rasterize a plan (vector SVG, no embedded bitmap) to a white JPEG data URL. Any
 // background reference image is drawn separately from its data URL first, so the
 // canvas never gets tainted by an SVG-embedded bitmap (which breaks toDataURL on Safari).
-async function svgToJpeg(svgString, pxWidth = 1600, bgImg = null, bgT = null) {
+export async function svgToJpeg(svgString, pxWidth = 1600, bgImg = null, bgT = null) {
   const m = svgString.match(/viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/);
   const vbx = m ? parseFloat(m[1]) : 0, vby = m ? parseFloat(m[2]) : 0;
   const vbw = m ? parseFloat(m[3]) : 1000, vbh = m ? parseFloat(m[4]) : 1000;
@@ -67,7 +87,7 @@ async function svgToJpeg(svgString, pxWidth = 1600, bgImg = null, bgT = null) {
   return { dataUrl: c.toDataURL("image/jpeg", 0.92), ratio: h / w };
 }
 
-async function fetchDataUrl(url) {
+export async function fetchDataUrl(url) {
   try {
     const r = await fetch(url);
     if (!r.ok) return null;
@@ -208,7 +228,7 @@ function drawCommentCard(doc, c, num, x, y, w, h, photo) {
 
 // Render one room's 3 pages (summary · plan+comments · colours+links+images+inventory)
 // into an existing doc. `first` = don't start with a page break.
-async function addRoomPages(doc, data, first) {
+export async function addRoomPages(doc, data, first) {
   const { roomName, title, svgString, comments = [], bgImg = null, bgT = null,
     description = "", actions = "", colors = [], docs = [], items = [], inventory = {}, cover = {} } = data;
   const name = titleCase(roomName || title || "Rum");
@@ -225,12 +245,18 @@ async function addRoomPages(doc, data, first) {
   doc.setFillColor(...BLUE); doc.rect(0, 0, A4.w, 4, "F");
   doc.setTextColor(...BLUE); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
   doc.text("VILLA SKOGSTORP", M, 20);
-  doc.setTextColor(...INK); doc.setFont("helvetica", "bold"); doc.setFontSize(30);
-  doc.text(name, M, 33);
-  doc.setDrawColor(...BLUE); doc.setLineWidth(0.9); doc.line(M, 37, M + 26, 37);
+  // Room name: shrink to fit the width (down to 20 pt), then wrap.
+  doc.setTextColor(...INK); doc.setFont("helvetica", "bold");
+  let fs = 30;
+  doc.setFontSize(fs);
+  while (fs > 20 && doc.getTextWidth(name) > CW) { fs -= 1; doc.setFontSize(fs); }
+  const nameLines = doc.splitTextToSize(name, CW);
+  const dy = (nameLines.length - 1) * fs * 0.42;
+  doc.text(nameLines, M, 33);
+  doc.setDrawColor(...BLUE); doc.setLineWidth(0.9); doc.line(M, 37 + dy, M + 26, 37 + dy);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(...MUTED);
-  doc.text("Rumsplanering · " + new Date().toLocaleDateString("sv-SE"), M, 44);
-  let y = 52;
+  doc.text("Rumsplanering · " + new Date().toLocaleDateString("sv-SE"), M, 44 + dy);
+  let y = 52 + dy;
   const info = [];
   if (cover.projectName) info.push(["Projekt", cover.projectName]);
   if (cover.officialName) info.push(["Fastighet", cover.officialName]);
@@ -375,7 +401,7 @@ async function addRoomPages(doc, data, first) {
 
 // Single room → nicely designed 3-page PDF.
 export async function savePlanPdf(data) {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = newDoc();
   await addRoomPages(doc, data, true);
   const name = titleCase(data.roomName || data.title || "Rum");
   doc.save(data.filename || safe("Villa Skogstorp " + name) + ".pdf");
@@ -383,7 +409,7 @@ export async function savePlanPdf(data) {
 
 // Whole project → cover page + each room's full 3-page layout, stacked into one PDF.
 export async function saveProjectPdf({ title = "Villa Skogstorp", cover = {}, colors = [], sections = [], filename }) {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const doc = newDoc();
   const name = cover.projectName || title;
   const date = new Date().toLocaleDateString("sv-SE");
 

@@ -34,6 +34,8 @@ export default function Project() {
   const sum = useBudgetSummary();
   const [status, setStatus] = useState("");
   const [showOther, setShowOther] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(null); // "all" | section id
+  const [pdfStatus, setPdfStatus] = useState("");
   const fileRef = useRef(null);
 
   const doExport = async () => {
@@ -56,11 +58,25 @@ export default function Project() {
     }
   };
 
+  // Build the whole PDF (checked sections, in PDF order) or a single section.
+  const buildPdf = async (which) => {
+    const ids = which === "all" ? PDF_SECTIONS.map(([id]) => id).filter((id) => space.pdf?.[id]?.on !== false) : [which];
+    setPdfBusy(which); setPdfStatus("Skapar PDF …");
+    try {
+      const { buildProjectPdf } = await import("../planner/projectPdf.js");
+      await buildProjectPdf({ project: space, ids, onProgress: (t) => setPdfStatus("Skapar PDF … " + t) });
+      setPdfStatus("PDF klar – " + new Date().toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit" }));
+    } catch (e) {
+      setPdfStatus("Fel: " + e.message);
+    }
+    setPdfBusy(null);
+  };
+
   if (!space) return <div className="page"><p className="sub">Laddar …</p></div>;
   const opts = usePdfOptsSafe(space, update);
   const T = Object.fromEntries(PDF_SECTIONS.map(([id, n, t]) => [id, { n, t }]));
   const S = (id, summary, children, extra = {}) => (
-    <Section key={id} id={id} n={T[id].n} title={T[id].t} summary={summary} opts={opts} {...extra}>{children}</Section>
+    <Section key={id} id={id} n={T[id].n} title={T[id].t} summary={summary} opts={opts} onPdf={buildPdf} busy={pdfBusy} {...extra}>{children}</Section>
   );
   const cover = space.cover || {};
   const chapters = space.chapters || [];
@@ -78,7 +94,7 @@ export default function Project() {
         skrivs här; budget och utrymmen hämtas från sina egna sidor och här väljer du bara vad som ska med.
       </p>
 
-      <PdfBuilder opts={opts} sections={PDF_SECTIONS} />
+      <PdfBuilder opts={opts} sections={PDF_SECTIONS} onBuild={() => buildPdf("all")} busy={pdfBusy} status={pdfStatus} />
 
       {S("cover", [cover.projectName, cover.officialName, cover.houseAddress].filter(Boolean).join(" · ") || "Ej ifyllt",
         <><CoverInfo space={space} update={update} /><CoverImagePicker space={space} opts={opts} /></>)}
@@ -124,7 +140,7 @@ export default function Project() {
         <DocList space={space} update={update} />
 
         <h3>Kommentarer & bilder per rum</h3>
-        <p className="sub">Allt som placerats på utrymmenas planritningar, samlat per utrymme. Här finns även den gamla PDF-funktionen tills den nya är klar.</p>
+        <p className="sub">Allt som placerats på utrymmenas planritningar, samlat per utrymme. 🖨 = PDF för ett enskilt utrymme (samma sidor som i projekt-PDF:en).</p>
         <RoomsCommentBrowser cover={space.cover} colors={space.colors} />
 
         <h3>Anteckningar</h3>

@@ -202,6 +202,11 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   dit när terrassen är byggd); natursten, granitplattor, blocksteg, **inga räcken**. Scheman räknas med `sched2.py`
   (scratch) – fönster: Utvändigt ≥15 mars, terrass ≥19 april, pMAL2 ≥26 april. Etapp 2: **trädgård september 2027** (efter inflytt): **färdiggräs i september** (svalt/regn, slipper
   sommarvattning och vattningsförbud), plantering, utebelysning, garage/friggebod-grund hösten 2027 (inte bråttom), friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
+- **Maskinschema (beslutat 2026-10-04)** – maskinen ska inte stå still: p0 (15–26 okt) steg 1–3 gårdsplan/runt källaren/
+  schakt källare → **pMASK** (parallellt med grunden 27 okt–12 nov) steg 4–7: trädgård grovplanering med egna massor,
+  matjord i **upplag**, terrass bilning + schakt, höjden bakom terrassen, garage schakt + bärlager (= upplagsplats under
+  bygget) → pMARK2 (13–19 nov) steg 8: ledningsgravar + återfyllning runt källaren (minigrävare räcker) → **april:
+  minigrävare ~2 d** (matjorden ut bakom huset + fyllning bakom terrassmurarna, innan terrassen stänger vägen).
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
   (i dag aggregerad per benämning + enhet, sorterad på kr).

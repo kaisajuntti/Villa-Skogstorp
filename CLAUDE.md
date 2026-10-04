@@ -112,6 +112,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - **Rollout DONE (2026-10-04):** signups off, accounts created, `01_auth.sql` + `02_lockdown.sql` applied, login
   code on main. Anonymous reads now return nothing; scripts use `scripts/vsapi.py` with `SUPABASE_ACCESS_TOKEN`.
 
+### Projektinfo för projekt-PDF (2026-10, steg 2)
+- Project space gets `contacts: [{id, role, name, company, phone, email, note}]` (**Kontakter & roller**) and
+  `tech: [{id, area, choice, detail}]` (**Tekniska val**) — `src/components/ProjectInfo.jsx` (`RowList`:
+  compact rows, tap → edit card, ↑/↓, Ta bort). Shown at the top of Projekt. Seeded by Claude (6 contacts,
+  10 tech choices from the decisions in this file). Contacts = personal data → only in Supabase.
+- Next (step 2 cont.): våning + ordning per rum, projektbeskrivning/kapitel, bilagor (PDF → `vs-docs`),
+  beslutslogg; then step 3 = new project PDF.
+
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),
   not in the jsonb store — see `src/photos.js` (`uploadPhoto`/`deletePhoto`/`photoUrl`).

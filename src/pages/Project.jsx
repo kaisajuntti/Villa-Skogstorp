@@ -3,6 +3,7 @@ import { useSpace, exportAll, importAll } from "../state.js";
 import { spaceKey } from "../storage.js";
 import { canEdit } from "../config.js";
 import { ColorScheme, DocList, Notes, RoomsCommentBrowser, CoverInfo } from "../components/Spaces.jsx";
+import { Contacts, TechChoices } from "../components/ProjectInfo.jsx";
 import VersionHistory from "../components/VersionHistory.jsx";
 import fullPlan from "../assets/situationsplan_full.jpg";
 
@@ -40,6 +41,14 @@ export default function Project() {
         Om- och tillbyggnad av enbostadshus · Villa Skogstorp, Karlshamn 5:1 ·
         Bygglovshandling Bjartmar och Hylta, situationsplan rev 2026-06-24, skala 1:200 (A1).
       </p>
+
+      <h2>Kontakter & roller</h2>
+      <p className="sub">Byggherre, entreprenör, KA, konstruktör, arkitekt m.fl. Visas i projekt-PDF:en. Sparas bara bakom inloggningen.</p>
+      <Contacts space={space} update={update} />
+
+      <h2>Tekniska val</h2>
+      <p className="sub">Beslutade systemval — uppvärmning, ventilation, tak, el … Visas i projekt-PDF:en.</p>
+      <TechChoices space={space} update={update} />
 
       <h2>Situationsplan</h2>
       <a href={fullPlan} target="_blank" rel="noreferrer">

@@ -140,7 +140,8 @@ export default function RoomPlanner({ storageKey, title }) {
   const [bgT, setBgT] = useState(null);     // { x, y, wmm, opacity, visible, rot } transform (in plan)
   const [bgHiddenLocal, setBgHiddenLocal] = useState(false); // per-session quick hide (not saved)
   const [walls, setWalls] = useState([]);   // freeform walls: [{ id, pts:[[x,y],...] }]
-  const [activeWall, setActiveWall] = useState(null); // id of the polyline being drawn
+  const [activeWall, setActiveWall] = useState(null); // id of the selected / being-drawn polyline
+  const [drawingWall, setDrawingWall] = useState(false); // true = taps add corners to activeWall (or start one)
   const [wallW, setWallW] = useState(WALL_OUTER); // thickness for the next freeform wall
   const [drawRect, setDrawRect] = useState(false);    // object-draw toggle (drag a rectangle)
   const [rectPreview, setRectPreview] = useState(null);
@@ -401,6 +402,7 @@ export default function RoomPlanner({ storageKey, title }) {
       return;
     }
     if (!readOnly && mode === "vaggar") {
+      if (!drawingWall) { setActiveWall(null); return; } // tap on empty canvas = deselect
       const s = snapPoint([p.x, p.y]);
       const np = s.snapped ? s.p : [snap(p.x), snap(p.y)];
       pushUndo();
@@ -534,6 +536,15 @@ export default function RoomPlanner({ storageKey, title }) {
     dragRef.current = { kind: "bg", dx: p.x - bgT.x, dy: p.y - bgT.y };
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
+  const onWallBodyDown = (e, wallId) => {
+    if (readOnly || mode !== "vaggar" || drawingWall) return;
+    e.stopPropagation();
+    setActiveWall(wallId);
+    const p = toSvg(e.clientX, e.clientY);
+    const w = walls.find((x) => x.id === wallId);
+    dragRef.current = { kind: "wallmove", wallId, x0: p.x, y0: p.y, pts0: w.pts.map((q) => [...q]), pre: takeSnap(), moved: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
   const onWallPtDown = (e, wallId, idx) => {
     if (readOnly || mode !== "vaggar") return;
     e.stopPropagation();
@@ -576,7 +587,10 @@ export default function RoomPlanner({ storageKey, title }) {
       return;
     }
     d.moved = true;
-    if (d.kind === "wallpt") {
+    if (d.kind === "wallmove") {
+      const dx = snap(p.x - d.x0), dy = snap(p.y - d.y0);
+      setWalls((ws) => ws.map((w) => (w.id === d.wallId ? { ...w, pts: d.pts0.map((q) => [q[0] + dx, q[1] + dy]) } : w)));
+    } else if (d.kind === "wallpt") {
       setWalls((ws) => ws.map((w) => (w.id === d.wallId ? { ...w, pts: w.pts.map((pp, i) => (i === d.idx ? [snap(p.x), snap(p.y)] : pp)) } : w)));
     } else if (d.kind === "bg") {
       setBgT((t) => (t ? { ...t, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : t));
@@ -817,9 +831,9 @@ export default function RoomPlanner({ storageKey, title }) {
     storage.delete(bgStorageKey);
   };
   // ---------- freeform walls ----------
-  const newWallLine = () => setActiveWall(null); // next tap starts a fresh polyline
+  const newWallLine = () => { setActiveWall(null); setDrawingWall(true); }; // next tap starts a fresh polyline
   const undoWallPoint = () => {
-    const id = activeWall || (walls.length ? walls[walls.length - 1].id : null);
+    const id = activeWall;
     if (!id) return;
     pushUndo();
     setWalls((ws) => ws
@@ -827,12 +841,23 @@ export default function RoomPlanner({ storageKey, title }) {
       .filter((w) => w.pts.length > 0));
   };
   const removeActiveWall = () => {
-    const id = activeWall || (walls.length ? walls[walls.length - 1].id : null);
+    const id = activeWall;
     if (!id) return;
     pushUndo();
     setWalls((ws) => ws.filter((w) => w.id !== id));
-    setActiveWall(null);
+    setOpenings((a) => a.filter((o) => o.wallId !== id));
+    setActiveWall(null); setDrawingWall(false);
   };
+  // Thickness: applies to the selected wall (and becomes the default for new walls).
+  const setThick = (nw) => {
+    setWallW(nw);
+    if (activeWall) { pushUndo(); setWalls((ws) => ws.map((w) => (w.id === activeWall ? { ...w, w: nw } : w))); }
+  };
+  const selWall = activeWall ? walls.find((w) => w.id === activeWall) : null;
+  const selWallInfo = selWall && selWall.pts.length > 1
+    ? `Markerad vägg: ${selWall.w ?? WALL} mm tjock · längd ${selWall.pts.slice(1).map((q, i) => Math.round(Math.hypot(q[0] - selWall.pts[i][0], q[1] - selWall.pts[i][1]))).join(" + ")} mm`
+    : null;
+  useEffect(() => { if (selWall && selWall.w != null) setWallW(selWall.w); }, [activeWall]); // eslint-disable-line
   const patchBg = (patch) => setBgT((t) => ({ ...(t || { x: 0, y: 0, wmm: room.w, opacity: 0.5, visible: true, rot: 0 }), ...patch }));
   const bgShown = !!(bgImg && bgT && bgT.visible && !bgHiddenLocal);
   const bgW = bgImg && bgT ? bgT.wmm : 0;
@@ -924,7 +949,7 @@ export default function RoomPlanner({ storageKey, title }) {
     if (g.free) {
       els.push(<line key="hit" x1={A[0]} y1={A[1]} x2={B[0]} y2={B[1]}
         stroke={isSel ? "rgba(90,122,140,0.5)" : "transparent"} strokeWidth={T + 160} strokeLinecap="butt"
-        style={{ cursor: "grab", pointerEvents: "all" }} onPointerDown={(e) => onOpDown(e, o)} />);
+        style={{ cursor: "grab", pointerEvents: mode === "vaggar" || mode === "mat" ? "none" : "all" }} onPointerDown={(e) => onOpDown(e, o)} />);
       if (isSel) {
         const tm = pt(g.A, g.along, o.pos + o.len / 2, g.inward, -(T + 260));
         els.push(<text key="dm" x={tm[0]} y={tm[1]} fontFamily={mono} fontSize="120" fill={blue} textAnchor="middle" fontWeight="bold">{o.len}</text>);
@@ -981,7 +1006,7 @@ export default function RoomPlanner({ storageKey, title }) {
   const btnOn = { ...btn, background: ink, color: "#fff" };
   const modeBtn = (m, label) => (
     <button style={mode === m ? btnOn : btn}
-      onClick={() => { setMode(m); setSel(null); setGroup([]); setActiveWall(null); setDrawRect(false); setRectPreview(null); setCalib(null); setMStart(null); setMPreview(null); }}>{label}</button>
+      onClick={() => { setMode(m); setSel(null); setGroup([]); setActiveWall(null); setDrawingWall(false); setDrawRect(false); setRectPreview(null); setCalib(null); setMStart(null); setMPreview(null); }}>{label}</button>
   );
 
   const rootStyle = {
@@ -1070,26 +1095,30 @@ export default function RoomPlanner({ storageKey, title }) {
       {!readOnly && !full && mode === "vaggar" && (
         <div style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
           <button style={wallW === WALL_OUTER ? { ...btnOn, background: blue, borderColor: blue } : btn}
-            onClick={() => { setWallW(WALL_OUTER); setActiveWall(null); }}>Yttervägg {WALL_OUTER}</button>
+            onClick={() => setThick(WALL_OUTER)}>Yttervägg {WALL_OUTER}</button>
           <button style={wallW === WALL_INNER ? { ...btnOn, background: blue, borderColor: blue } : btn}
-            onClick={() => { setWallW(WALL_INNER); setActiveWall(null); }}>Innervägg {WALL_INNER}</button>
+            onClick={() => setThick(WALL_INNER)}>Innervägg {WALL_INNER}</button>
           <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>Bredd
             <input type="number" inputMode="numeric" step={10} value={wallW}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
                 if (!Number.isFinite(v)) return;
-                const nw = clamp(v, 20, 1000);
-                setWallW(nw);
-                if (activeWall) setWalls((ws) => ws.map((w) => (w.id === activeWall ? { ...w, w: nw } : w)));
+                setThick(clamp(v, 20, 1000));
               }}
               style={{ width: 66, fontFamily: mono, fontSize: 13, padding: 5, border: `1.5px solid ${ink}`, borderRadius: 8 }} /> mm
           </label>
           <span style={{ width: 1, alignSelf: "stretch", background: "#00000022" }} />
-          <button style={btn} onClick={newWallLine}>+ Ny vägg</button>
-          <button style={btn} onClick={undoWallPoint}>Ångra punkt</button>
-          <button style={{ ...btn, color: red, borderColor: red }} onClick={removeActiveWall}>Ta bort vägg</button>
+          {drawingWall
+            ? <button style={{ ...btnOn, background: blue, borderColor: blue }} onClick={() => { setDrawingWall(false); setWalls((ws) => ws.filter((w) => w.pts.length > 1)); }}>✓ Klar</button>
+            : <button style={btn} onClick={newWallLine}>+ Ny vägg</button>}
+          {drawingWall && activeWall && <button style={btn} onClick={undoWallPoint}>Ångra punkt</button>}
+          {activeWall && !drawingWall && <button style={{ ...btn, color: red, borderColor: red }} onClick={removeActiveWall}>Ta bort vägg</button>}
           <button style={snapOn ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setSnapOn((s) => !s)}>{snapOn ? "✓ Fäst mot objekt" : "Fäst mot objekt"}</button>
-          <span style={{ fontSize: 12, color: "#7A756E" }}>Tryck för att sätta hörn · dra hörn för att justera · fäster mot hörn</span>
+          <span style={{ fontSize: 12, color: "#7A756E" }}>
+            {drawingWall ? "Tryck för att sätta hörn · ✓ Klar när väggen är färdig"
+              : selWallInfo ? selWallInfo
+              : "Tryck på en vägg för att markera den · dra väggen för att flytta · dra i hörnen för att justera"}
+          </span>
         </div>
       )}
 
@@ -1237,7 +1266,15 @@ export default function RoomPlanner({ storageKey, title }) {
             }
             return out;
           })}
-          {!readOnly && mode === "vaggar" && walls.flatMap((w) =>
+          {!readOnly && mode === "vaggar" && !drawingWall && walls.flatMap((w) =>
+            w.pts.slice(1).map((q, i) => (
+              <line key={"hit" + w.id + i} x1={w.pts[i][0]} y1={w.pts[i][1]} x2={q[0]} y2={q[1]}
+                stroke={w.id === activeWall ? blue : "transparent"} strokeOpacity={w.id === activeWall ? 0.45 : 0}
+                strokeWidth={Math.max((w.w ?? WALL) + 40, 260)} strokeLinecap="butt"
+                style={{ cursor: "move" }} onPointerDown={(e) => onWallBodyDown(e, w.id)} />
+            ))
+          )}
+          {!readOnly && mode === "vaggar" && walls.filter((w) => w.id === activeWall).flatMap((w) =>
             w.pts.map((p, i) => (
               <circle key={w.id + ":" + i} cx={p[0]} cy={p[1]} r="90"
                 fill="#fff" stroke={w.id === activeWall ? blue : ink} strokeWidth="18"
@@ -1260,7 +1297,7 @@ export default function RoomPlanner({ storageKey, title }) {
           </g>}
 
           {/* openings */}
-          <g style={{ pointerEvents: mode === "mat" ? "none" : undefined }}>
+          <g style={{ pointerEvents: mode === "mat" || mode === "vaggar" ? "none" : undefined }}>
             {openings.map(renderOpening)}
           </g>
 
@@ -1298,7 +1335,7 @@ export default function RoomPlanner({ storageKey, title }) {
           )}
 
           {/* items — bodies first, then de-collided labels on top */}
-          <g style={{ pointerEvents: mode === "mat" ? "none" : undefined }}>
+          <g style={{ pointerEvents: mode === "mat" || mode === "vaggar" ? "none" : undefined }}>
           {items.map((it) => {
             const isSel = selIt?.id === it.id;
             const inGroup = group.includes(it.id);

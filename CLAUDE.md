@@ -109,7 +109,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   chat/repo). `scripts/vsapi.py` uses it for SQL (`sql()`, Management API), the server key (data scripts,
   bypasses RLS) and user admin. Accounts: **one per person** (Claude creates them on request via the Auth
   admin API, auto-confirmed, `app_metadata.access` = 'edit' or 'view').
-- **Rollout status (2026-10-04):** code on branch `claude/villa-skogstorp-budget-x532jh`, NOT on main yet.
+- **Rollout status (2026-10-04) — "säkerhetsutrullningen":** the login CODE (auth.js, Login.jsx, sync/photos
+  token headers) is on branch `claude/villa-skogstorp-budget-x532jh`, NOT on main yet (merging it before accounts
+  exist would lock everyone out). Check that `SUPABASE_ACCESS_TOKEN` is set, then work from that branch.
   Order: disable signups → create accounts → run `01_auth.sql` → merge to main → owner logs in on
   devices → run `02_lockdown.sql`.
 

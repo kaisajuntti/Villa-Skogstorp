@@ -166,6 +166,11 @@ export default function RoomPlanner({ storageKey, title }) {
   const vbRef = useRef(null);
   const undoRef = useRef([]);
   const loadedRef = useRef(false);
+  // Save only after a real user edit on this device. Loading (or a sync refresh)
+  // must never push the local copy back — it may be stale and would overwrite
+  // newer changes from another device.
+  const editedRef = useRef(false);
+  const markEdited = () => { editedRef.current = true; };
 
   // ---------- undo ----------
   const takeSnap = () => ({
@@ -204,6 +209,7 @@ export default function RoomPlanner({ storageKey, title }) {
   }, []);
   useEffect(() => {
     undoRef.current = []; setUndoN(0);
+    editedRef.current = false;
     (async () => {
       try {
         const r = await storage.get(storageKey);
@@ -229,7 +235,7 @@ export default function RoomPlanner({ storageKey, title }) {
       if (dragRef.current) return;
       try {
         const r = await storage.get(storageKey);
-        if (r && r.value) { applySaved(JSON.parse(r.value)); setStatus("Uppdaterat från synk"); }
+        if (r && r.value) { editedRef.current = false; applySaved(JSON.parse(r.value)); setStatus("Uppdaterat från synk"); }
         const rb = await storage.get(bgStorageKey);
         setBgImg(rb && rb.value ? JSON.parse(rb.value) : null);
       } catch { /* ignore */ }
@@ -238,7 +244,7 @@ export default function RoomPlanner({ storageKey, title }) {
     return () => window.removeEventListener("vs-sync", onSync);
   }, [storageKey, bgStorageKey, applySaved]);
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (!loadedRef.current || !editedRef.current) return;
     const t = setTimeout(async () => {
       try {
         await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(dims.length ? { dims } : {}), ...(bgT ? { bg: bgT } : {}) }));
@@ -986,7 +992,7 @@ export default function RoomPlanner({ storageKey, title }) {
   };
 
   return (
-    <div style={rootStyle}>
+    <div style={rootStyle} onPointerDownCapture={markEdited} onKeyDownCapture={markEdited} onChangeCapture={markEdited}>
       <input ref={cmPhotoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPickCommentPhoto} />
       <div style={{ padding: "10px 16px 6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div>

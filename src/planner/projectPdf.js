@@ -593,6 +593,7 @@ function renderColors(W, P, n, title) {
 async function loadAttachments(list, progress) {
   const out = [];
   for (const a of list) {
+    if (a.mode === "list") { out.push({ ...a, kind: "list", pages: 0 }); continue; }
     progress?.("Hämtar bilaga – " + a.title);
     try {
       const url = await signedDocUrl(a.path);
@@ -619,11 +620,13 @@ function renderAttachments(W, atts, n, title) {
   if (!atts.length) return false;
   W.h1(n, title);
   const L = (i) => String.fromCharCode(65 + i);
-  W.table([{ label: "", w: 10 }, { label: "Bilaga" }, { label: "Sidor", w: 20, align: "right" }],
-    atts.map((a, i) => [L(i), a.title + (a.kind === "err" ? "  (kunde inte hämtas: " + a.error + ")" : ""), a.kind === "pdf" ? String(a.pages) : a.kind === "img" ? "1" : "–"]), { size: 10 });
+  W.table([{ label: "", w: 10 }, { label: "Bilaga" }, { label: "I denna PDF", w: 34 }],
+    atts.map((a, i) => [L(i), a.title + (a.kind === "err" ? "  (kunde inte hämtas: " + a.error + ")" : ""),
+      a.kind === "pdf" ? "Bifogad, " + a.pages + " s." : a.kind === "img" ? "Bifogad, 1 s." : a.kind === "list" ? "Listad – separat" : "–"]), { size: 10 });
+  if (atts.some((a) => a.kind === "list")) W.note("Listade bilagor ingår i handlingarna men är inte inlagda i denna PDF (t.ex. ritningar i stort format).");
   const { doc } = W;
   atts.forEach((a, i) => {
-    if (a.kind === "err") return;
+    if (a.kind === "err" || a.kind === "list") return;
     W.newPage("p");
     a.dividerPage = W.page();
     W.font(12, "bold", BLUE); doc.text("BILAGA " + L(i), M, 110);

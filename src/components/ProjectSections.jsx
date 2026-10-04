@@ -220,7 +220,7 @@ export function Attachments({ space, update }) {
   const mb = (b) => (b ? (b / 1048576).toFixed(1) + " MB" : "");
   return (
     <div>
-      <p className="sub" style={{ marginTop: 0 }}>PDF:er som klistras in sist i projekt-PDF:en. Lagras privat – öppnas bara inloggad.</p>
+      <p className="sub" style={{ marginTop: 0 }}>Alla ibockade bilagor står i bilageförteckningen. <b>Bifogas</b> = sidorna läggs in sist i projekt-PDF:en, <b>Listas bara</b> = bara namnet (t.ex. stora ritningar som skrivs ut separat). Lagras privat – öppnas bara inloggad.</p>
       {!ro && (
         <div className="row" style={{ marginBottom: 10 }}>
           <input ref={fileRef} type="file" accept="application/pdf,image/*" multiple style={{ display: "none" }} onChange={onPick} />
@@ -234,6 +234,11 @@ export function Attachments({ space, update }) {
           <span style={{ fontFamily: "var(--mono)", ...muted, width: 22 }}>{String.fromCharCode(65 + i)}</span>
           <input type="checkbox" title="Med i PDF" checked={it.on !== false} disabled={ro} onChange={(e) => patch(i, { on: e.target.checked })} />
           <input type="text" value={it.title} readOnly={ro} onChange={(e) => patch(i, { title: e.target.value })} style={{ flex: 1, minWidth: 140 }} />
+          <select disabled={ro || it.on === false} value={it.mode || "full"} onChange={(e) => patch(i, { mode: e.target.value })} style={{ width: "auto", padding: "3px 6px", fontSize: 12.5 }}
+            title="Bifogas = sidorna läggs in i PDF:en. Listas = bara namnet står i bilageförteckningen.">
+            <option value="full">Bifogas</option>
+            <option value="list">Listas bara</option>
+          </select>
           <span style={muted}>{mb(it.size)}</span>
           <button className="btn small" onClick={() => open(it)}>Öppna</button>
           {!ro && <>

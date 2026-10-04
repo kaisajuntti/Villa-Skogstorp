@@ -124,7 +124,7 @@ export default function Project() {
 
       {S("colors", `${(space.colors || []).length} kulörer`, <ColorScheme space={space} update={update} />)}
 
-      {S("attachments", `${atts.filter((a) => a.on !== false).length} av ${atts.length} bilagor med`, <Attachments space={space} update={update} />)}
+      {S("attachments", `${atts.filter((a) => a.on !== false && a.mode !== "list").length} bifogas · ${atts.filter((a) => a.on !== false && a.mode === "list").length} listas · ${atts.length} totalt`, <Attachments space={space} update={update} />)}
 
       <h2 style={{ marginTop: 34, cursor: "pointer" }} onClick={() => setShowOther((v) => !v)}>
         Övrigt (ingår inte i PDF:en) {showOther ? "▾" : "▸"}

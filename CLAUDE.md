@@ -142,7 +142,10 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   per yrke, leveranser, Gantt on a landscape page; `prices:false` hides every amount. Våningar: floor overview (floor image
   + tints + labels drawn on canvas) then each utrymme — full = `addRoomPages` (the room 3-pager), compact = 1 page — +
   its inspo grid. Bilagor: fetched via signed URL before rendering (page counts known), "Bilaga A" divider page, then
-  **pdf-lib** inserts the attachment's pages after its divider. Footer "n / N" on every page but the cover.
+  **pdf-lib** inserts the attachment's pages after its divider. Attachment `mode`: `"full"` (default, pages included) or
+  `"list"` (only named in the bilageförteckning, "Listad – separat" — e.g. A1 construction drawings). Current bilagor
+  (2026-10-04, private vs-docs): A bygglovsbeslut, B strandskyddsdispens, C tomtplatsavgränsning, D antikvariskt utlåtande
+  (Restaurera), E bygglovshandling rev 260616 (full); F–H K-01-0-001 / K-15-1-100 / K-20-2-100 konstruktion (list). Footer "n / N" on every page but the cover.
   Budget arithmetic is shared in **`src/budgetCalc.js`** (`computeBudget`) — Budget page, Projekt summary and PDF.
   **jsPDF fonts = Windows-1252 only**: one char outside it (≈ → ✓ emoji) garbles the whole line, so `newDoc()` (pdf.js)
   patches text/splitTextToSize/getTextWidth to run `clean()` — always create docs via `newDoc()`.

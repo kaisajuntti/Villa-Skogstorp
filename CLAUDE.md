@@ -133,6 +133,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   main entrance is demolished; "balkong liten" doesn't exist (it is the roof of the kitchen farstukvist).
 - **Planner save rule (bug fix 2026-10-04):** the planner saves only after a real user edit on that device
   (`editedRef`); loading/sync never writes back (it used to overwrite newer remote data with a stale local copy).
+- Fine-tuned 2026-10-04 (`build.py clean()`): double-line (befintliga) walls merged into one wall, collinear overlaps
+  merged, endpoints snapped to perpendicular walls (L-corners extended to the outer face → no gaps/notches), doors on
+  thick walls detected from the face; manual door/window fixes in `fixups.py` (apply…apply6). Scale verified against
+  the drawing's areas (Gästrum 12,9/13,0 m², Arbetsrum 14,1/14,0, Förråd 9,2/9,5; outer width 4 200/4 180).
+- **Väggar mode UX (2026-10-04):** tap a wall = select it (blue highlight, handles only on that wall); drag the wall
+  body = move it; drag a handle = move a corner; Yttervägg/Innervägg/Bredd apply to the selected wall; "Ta bort vägg"
+  deletes it (+ its openings). "+ Ny vägg" starts drawing (taps add corners), "✓ Klar" ends. Openings are not
+  draggable in Väggar/Mät mode (so they don't steal taps).
 - Next: floor view (Källare · Plan 1 · Plan 2) with clickable utrymme polygons from `floors.py`.
 
 ### Photo uploads (Supabase Storage)

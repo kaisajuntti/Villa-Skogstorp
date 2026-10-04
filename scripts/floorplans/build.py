@@ -27,6 +27,8 @@ def dark(g,org,x,y):
     if py<2 or px<2 or py>=g.shape[0]-2 or px>=g.shape[1]-2: return False
     return g[py-3:py+4,px-3:px+4].min()<170
 def arcscore(g,org,o,c,T,h,r,side,dirn):
+    return max(_arc(g,org,o,c+side*off,T,h,r,side,dirn) for off in (0,T/2-40))
+def _arc(g,org,o,c,T,h,r,side,dirn):
     # hinge at along-coordinate h; leaf opens to side (+1/-1 in normal); arc spans along toward dirn
     hits=0; n=0
     for th in range(20,80,6):
@@ -48,7 +50,7 @@ def build(fl,name,zone,rid,extra_walls=(),bbox_pad=350):
     P=[p for n,z,p in F[fl]['u'] if n==name][0]; P=poly_mm(fl,P)
     bx0=min(p[0] for p in P); by0=min(p[1] for p in P); bx1=max(p[0] for p in P); by1=max(p[1] for p in P)
     W=round(bx1-bx0); L=round(by1-by0)
-    walls=merge(rs+list(extra_walls))
+    walls=clean(merge(rs+list(extra_walls)))
     E=bbox_pad; out=[]; ops=[]
     for i,w in enumerate(walls):
         if w['o']=='h':
@@ -88,3 +90,45 @@ def build(fl,name,zone,rid,extra_walls=(),bbox_pad=350):
     plan={"v":2,"room":{"w":W,"l":L,"frame":False},"openings":ops,"items":[],"walls":out,
           "bg":{"x":-M,"y":-M,"wmm":round(Rb.width*K),"opacity":0.3,"visible":True,"rot":0}}
     return plan,bg,(bx0,by0)
+
+# ---------- geometry cleanup: hollow pairs, collinear overlaps, corners ----------
+def clean(walls):
+    # 1) hollow (double-line) walls: two thin parallel walls close together -> one wall spanning both faces
+    ws=sorted(walls,key=lambda w:(w['o'],w['c']))
+    out=[]
+    for w in ws:
+        for v in out:
+            if v['o']==w['o'] and v['T']<160 and w['T']<160 and 0<abs(w['c']-v['c'])<260 \
+               and min(v['e'],w['e'])-max(v['s'],w['s'])>0.6*min(v['e']-v['s'],w['e']-w['s']):
+                lo=min(v['c']-v['T']/2,w['c']-w['T']/2); hi=max(v['c']+v['T']/2,w['c']+w['T']/2)
+                v['c']=(lo+hi)/2; v['T']=hi-lo; v['s']=min(v['s'],w['s']); v['e']=max(v['e'],w['e'])
+                v['gaps']=sorted(set(v['gaps'])|set(w['gaps'])); v['hollow']=True; break
+        else: out.append(dict(w))
+    # 2) collinear overlapping segments -> merge (keep gaps)
+    res=[]
+    for w in sorted(out,key=lambda w:(w['o'],round(w['c']/40),w['s'])):
+        for v in res:
+            if v['o']==w['o'] and abs(v['c']-w['c'])<45 and w['s']<=v['e']+5 and w['e']>=v['s']-5:
+                v['e']=max(v['e'],w['e']); v['s']=min(v['s'],w['s']); v['T']=max(v['T'],w['T']); v['gaps']+=w['gaps']; break
+        else: res.append(w)
+    res=[w for w in res if w['e']-w['s']>=90]
+    # 3) endpoints: snap onto perpendicular walls; L-corners extended to the outer face
+    def perp(w,end):
+        pt=w[end]; best=None
+        for v in res:
+            if v['o']==w['o']: continue
+            if not (v['s']-v['T']/2-60<=w['c']<=v['e']+v['T']/2+60): continue
+            d=abs(pt-v['c'])
+            if d<=v['T']/2+w['T']/2+180 and (best is None or d<best[0]): best=(d,v)
+        return best[1] if best else None
+    new={}
+    for i,w in enumerate(res):
+        for end in ('s','e'):
+            v=perp(w,end)
+            if not v: continue
+            corner = abs(w['c']-v['s'])<=w['T']/2+v['T']/2+180 or abs(w['c']-v['e'])<=w['T']/2+v['T']/2+180
+            sgn=-1 if end=='s' else 1
+            new[(i,end)] = v['c']+sgn*v['T']/2 if corner else v['c']
+    for (i,end),val in new.items(): res[i][end]=val
+    # make L-corner partners reach the corner too (perp end of v)
+    return res

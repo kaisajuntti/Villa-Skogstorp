@@ -104,3 +104,50 @@ def apply_user(gen):
         if it['y']>=6200:
             x0,y0=ph(it['x']+it['w'],it['y']+it['h'])
             p['items'].append({"id":"k"+it['id'],"t":it['t'],"x":round(x0-ox),"y":round(y0-oy),"w":it['w'],"h":it['h']})
+def apply4(gen):
+    g=gen['u-p1-entre']
+    set_kind(g,7850,16450,17550,'pardorr',out=True)        # huvudentré, pardörr (slår utåt)
+    set_kind_v(g,18420,8450,9250,'oppning')                 # vindfång -> hall
+    g=gen['u-p1-vardagsrum']
+    set_kind_v(g,18450,11800,13000,'pardorr',out=True)      # vardagsrum -> kök (2 st)
+    set_kind_v(g,18450,14850,16050,'pardorr',out=True)
+    g=gen['u-p1-tvatt']
+    set_kind(g,10050,5900,7100,'dorr',out=False)            # tvätt -> yttertrappan
+    # walls that are (almost) entirely an opening are tracing artefacts
+    for g in gen.values():
+        p=g['plan']
+        if p['room'].get('frame') is not False: continue
+        drop=set()
+        for w in p['walls']:
+            L=sum(math.hypot(b[0]-a[0],b[1]-a[1]) for a,b in zip(w['pts'],w['pts'][1:]))
+            cov=sum(o['len'] for o in p['openings'] if o.get('wallId')==w['id'])
+            ops=[o for o in p['openings'] if o.get('wallId')==w['id']]
+            if not w['id'].endswith('x') and (w.get('w') or 200)<=130 and len(ops)==1 and ops[0]['len']>=0.85*L: drop.add(w['id'])
+        p['walls']=[w for w in p['walls'] if w['id'] not in drop]
+        p['openings']=[o for o in p['openings'] if o.get('wallId') not in drop]
+        if drop: print('dropped',g['name'],drop)
+def W(g,wid): return next(w for w in g['plan']['walls'] if w['id']==wid)
+def apply5(gen):
+    g=gen['u-p1-entre']; p=g['plan']
+    w7=W(g,'w7'); w7['pts']=[[6509,867],[8544,867]]; w7['w']=300
+    p['openings']=[o for o in p['openings'] if o['wallId']!='w7']+[{"id":"oEntre","wallId":"w7","seg":0,"pos":0,"len":1230,"kind":"pardorr","flip":False,"out":True}]
+    g=gen['u-p1-tvatt']; p=g['plan']
+    W(g,'w8')['w']=280
+    for o in p['openings']:
+        if o['wallId']=='w8': o['kind']='oppning'
+        if o['wallId']=='w5': o.update(pos=690,len=900)
+    # sanitize: openings must lie on their wall
+    for g in gen.values():
+        p=g['plan']; ws={w['id']:w for w in p['walls']}
+        def ok(o):
+            if 'wallId' not in o: return True
+            w=ws.get(o['wallId'])
+            if not w: return False
+            a,b=w['pts'][o.get('seg',0)],w['pts'][o.get('seg',0)+1]
+            return o['pos']>=-5 and o['pos']+o['len']<=math.hypot(b[0]-a[0],b[1]-a[1])+5
+        p['openings']=[o for o in p['openings'] if ok(o)]
+def apply6(gen):
+    g=gen['u-k-gamla']; p=g['plan']
+    p['walls']+= [{"id":"wInstV","w":290,"pts":[[3899,2801],[3899,5786]]},
+                  {"id":"wInstO","w":660,"pts":[[6687,-624],[6687,6546]]}]
+    p['openings'].append({"id":"oInst","wallId":"wInstV","seg":0,"pos":0,"len":800,"kind":"dorr","flip":False,"out":True})

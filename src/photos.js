@@ -3,11 +3,11 @@
 // but keep enough detail for reference photos. The public URL is stored in the
 // doc / comment record; `path` is kept so the object can be deleted later.
 import { SUPABASE } from "./appconfig.js";
+import { authHeaders } from "./auth.js";
 
 export const PHOTO_BUCKET = "vs-photos";
 const base = SUPABASE.url.replace(/\/+$/, "");
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const authHeaders = () => ({ apikey: SUPABASE.key, Authorization: "Bearer " + SUPABASE.key });
 
 export function photoUrl(path) {
   return `${base}/storage/v1/object/public/${PHOTO_BUCKET}/${encodeURI(path)}`;
@@ -60,7 +60,7 @@ export async function uploadPhoto(file) {
   const path = `${SUPABASE.workspace}/${rid()}.jpg`;
   const r = await fetch(`${base}/storage/v1/object/${PHOTO_BUCKET}/${encodeURI(path)}`, {
     method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "image/jpeg", "x-upsert": "false" },
+    headers: { ...(await authHeaders()), "Content-Type": "image/jpeg", "x-upsert": "false" },
     body: blob,
   });
   if (!r.ok) {
@@ -78,7 +78,7 @@ export async function deletePhoto(path) {
   try {
     await fetch(`${base}/storage/v1/object/${PHOTO_BUCKET}/${encodeURI(path)}`, {
       method: "DELETE",
-      headers: authHeaders(),
+      headers: await authHeaders(),
     });
   } catch { /* ignore */ }
 }

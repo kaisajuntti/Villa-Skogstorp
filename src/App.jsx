@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { useRooms } from "./state.js";
-import { gateEnabled, isUnlocked, canEdit, clearAccess } from "./config.js";
+import { isUnlocked, canEdit, currentUser } from "./config.js";
+import { logout } from "./auth.js";
 import { syncPull } from "./storage.js";
 import Overview from "./pages/Overview.jsx";
 import Project from "./pages/Project.jsx";
 import Budget from "./pages/Budget.jsx";
 import Zone from "./pages/Zone.jsx";
 import Room from "./pages/Room.jsx";
-import Lock from "./pages/Lock.jsx";
+import Login from "./pages/Login.jsx";
 
 // Tiny hash router: #/ · #/projekt · #/budget[/etapp2] · #/omrade/<id> · #/rum/<id>
 function parseHash() {
@@ -27,7 +28,7 @@ export default function App() {
     window.addEventListener("vs-config", onCfg);
     return () => window.removeEventListener("vs-config", onCfg);
   }, []);
-  if (!unlocked) return <Lock onUnlocked={() => setUnlockedState(true)} />;
+  if (!unlocked) return <Login onLoggedIn={() => setUnlockedState(true)} />;
   return <AppInner />;
 }
 
@@ -65,13 +66,12 @@ function AppInner() {
         <a className={"navlink" + (route.page === "hem" ? " active" : "")} href="#/">Översikt</a>
         <a className={"navlink" + (route.page === "projekt" ? " active" : "")} href="#/projekt">Projekt</a>
         <a className={"navlink" + (route.page === "budget" ? " active" : "")} href="#/budget">Budget</a>
-        {gateEnabled && (
-          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            {!canEdit() && <span className="zonechip" title="Skrivskyddad – ange redigeringslösenord för att ändra">Skrivskyddad</span>}
-            <button className="navlink" style={{ background: "none", border: "none", cursor: "pointer" }}
-              title="Lås appen" onClick={() => { if (confirm("Lås appen på den här enheten?")) clearAccess(); }}>Lås 🔒</button>
-          </span>
-        )}
+        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          {!canEdit() && <span className="zonechip" title="Ditt konto har bara läsbehörighet">Skrivskyddad</span>}
+          <button className="navlink" style={{ background: "none", border: "none", cursor: "pointer" }}
+            title={"Inloggad som " + (currentUser()?.email || "")}
+            onClick={() => { if (confirm("Logga ut " + (currentUser()?.email || "") + " på den här enheten?")) logout(); }}>Logga ut</button>
+        </span>
       </nav>
       <div className={"main" + (isRoom ? " noscroll" : "")}>
         {route.page === "hem" && <Overview rooms={roomsApi.rooms} />}

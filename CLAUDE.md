@@ -92,6 +92,21 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   lists snapshots with Restore. Restore pushes the chosen data as current (which snapshots
   the current state first). Sync-only feature (versions live in Supabase).
 
+### Inloggning & säkerhet (Supabase Auth, 2026-10)
+- The old SHA-256 password gate (`Lock.jsx`, VIEW/EDIT hashes) is **replaced** by real Supabase Auth
+  (email + password): `src/auth.js` (REST login/refresh/logout, session in `vs:v1:session`,
+  `authHeaders()` = publishable apikey + user's access token), `src/pages/Login.jsx`, nav "Logga ut".
+- Access level = `app_metadata.access` ('edit' | 'view', set by admin via SQL — users can't change it);
+  anything else = read-only in the UI and **no access at all** in RLS.
+- RLS SQL in `supabase/`: `01_auth.sql` (vs_access() helper, authenticated policies, vs-photos
+  insert/delete for 'edit', **private bucket `vs-docs`** for sensitive docs — signed URLs) and
+  `02_lockdown.sql` (drops the old anon policies; run only after every device has logged in).
+  Public signups must be **off** (Authentication → Sign In / Providers).
+- **Sensitive material (kontrakt, KA-handlingar, kontakter/personuppgifter) never goes in the repo or
+  `public/`** — the repo is public. It lives in Supabase (`vs-docs` / space records) behind login.
+- Maintenance scripts use `scripts/vsapi.py` (login with `VS_EMAIL`/`VS_PASSWORD` from the
+  environment — a dedicated 'edit' user; never commit credentials).
+
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),
   not in the jsonb store — see `src/photos.js` (`uploadPhoto`/`deletePhoto`/`photoUrl`).

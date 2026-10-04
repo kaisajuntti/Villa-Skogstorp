@@ -4,6 +4,8 @@
 //   vs:v1:plan:<id>    -> kind 'plan',  key <id>
 //   vs:v1:space:<id>   -> kind 'space', key <id>
 
+import { authHeaders } from "./auth.js";
+
 export const SYNC_PREFIX = "vs:v1:";
 
 export function isSyncable(storageKey) {
@@ -30,12 +32,9 @@ export function toStorageKey(kind, key) {
   return null;
 }
 
-function headers(cfg) {
-  return {
-    apikey: cfg.key,
-    Authorization: "Bearer " + cfg.key,
-    "Content-Type": "application/json",
-  };
+// Logged-in user's token (RLS requires an authenticated user).
+async function headers() {
+  return { ...(await authHeaders()), "Content-Type": "application/json" };
 }
 const base = (cfg) => cfg.url.replace(/\/+$/, "") + "/rest/v1";
 const enc = encodeURIComponent;
@@ -43,7 +42,7 @@ const enc = encodeURIComponent;
 // Verify url+key+workspace by doing a scoped read.
 export async function testConnection(cfg) {
   const r = await fetch(`${base(cfg)}/vs_items?select=key&limit=1&workspace=eq.${enc(cfg.workspace)}`, {
-    headers: headers(cfg),
+    headers: await headers(),
   });
   if (!r.ok) throw new Error("HTTP " + r.status + " — kontrollera URL och nyckel");
   return true;
@@ -52,7 +51,7 @@ export async function testConnection(cfg) {
 export async function pullAll(cfg) {
   const r = await fetch(
     `${base(cfg)}/vs_items?select=kind,key,data,updated_at,updated_by&workspace=eq.${enc(cfg.workspace)}`,
-    { headers: headers(cfg) }
+    { headers: await headers() }
   );
   if (!r.ok) throw new Error("pull HTTP " + r.status);
   return r.json();
@@ -67,7 +66,7 @@ export async function push(cfg, kind, key, data, updatedAt) {
   }];
   const r = await fetch(`${base(cfg)}/vs_items?on_conflict=workspace,kind,key`, {
     method: "POST",
-    headers: { ...headers(cfg), Prefer: "resolution=merge-duplicates,return=minimal" },
+    headers: { ...(await headers()), Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error("push HTTP " + r.status);
@@ -77,7 +76,7 @@ export async function push(cfg, kind, key, data, updatedAt) {
 export async function remove(cfg, kind, key) {
   const r = await fetch(
     `${base(cfg)}/vs_items?workspace=eq.${enc(cfg.workspace)}&kind=eq.${enc(kind)}&key=eq.${enc(key)}`,
-    { method: "DELETE", headers: { ...headers(cfg), Prefer: "return=minimal" } }
+    { method: "DELETE", headers: { ...(await headers()), Prefer: "return=minimal" } }
   );
   return r.ok;
 }
@@ -87,7 +86,7 @@ export async function fetchVersions(cfg, kind, key, limit = 50) {
     `${base(cfg)}/vs_versions?select=id,data,updated_by,created_at` +
     `&workspace=eq.${enc(cfg.workspace)}&kind=eq.${enc(kind)}&key=eq.${enc(key)}` +
     `&order=created_at.desc&limit=${limit}`,
-    { headers: headers(cfg) }
+    { headers: await headers() }
   );
   if (!r.ok) throw new Error("versions HTTP " + r.status);
   return r.json();

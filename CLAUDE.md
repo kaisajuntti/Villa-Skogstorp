@@ -129,7 +129,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - New concept **utrymme** = one entry in `vs:v1:rooms` that may cover several rooms. 12 utrymmen drawn from the
   bygglov rev 2026-06-16 (ids `u-k-*`, `u-p1-*`, `u-p2-*`, names prefixed "K ·", "P1 ·", "P2 ·"): K Nya/Gamla källaren;
   P1 Gästrum, Tvätt, Arbetsrum, Entré/hallar/WC/städ/trapphall, Vardagsrum & matsal, Kök; P2 Sovrum & WC/D,
-  Allrum/rum/trapphall, Master bedroom/walk-in/bathroom, Balkong. The old rooms are kept (to be deleted by the owner later).
+  Allrum/rum/trapphall, Master bedroom/walk-in/bathroom, Balkong. **Old rooms removed from the list 2026-10-04**: their
+  description/actions/notes/docs/colors moved into the utrymmen, old plan comments (+photos) became Dokument entries, budget
+  roomIds remapped; old rows stay in Supabase under the old ids, list archived in `space:arkiv-gamla-rum`.
 - Each has the architect drawing as background (exact scale, ±2.5 m, opacity 0.3) and walls/doors/windows auto-traced
   (`scripts/floorplans/`). **`room.frame === false`** = no rectangle room walls, only freeform walls (checkbox
   "Rumsväggar (rektangel)" in Rum mode). Kök + Master = the owner's own drawings (moved kitchen wall, garderober)

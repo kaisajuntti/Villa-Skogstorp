@@ -195,9 +195,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   (maskin når inte dit efteråt).
 - **Tidsplan v2 (beslutat 2026-10-04): mål KLART/BEBOELIGT 31 maj 2027**, juni = buffert, inflytt jul–aug.
   Omlott mellan husdelarna: Renovering befintlig startar när snickarna är klara i tillbyggnaden (plattsättaren
-  avslutar där). Målning i två omgångar: **omg. 1** (feb, spackel + grund + 1:a strykning, före parkett/kök) och
-  **omg. 2 (pMAL2, slutet apr–maj)** = målarens väderjobb: ute linoljefärg när torrt/varmt, inne (slutstrykning +
-  linoljefärg på snickerier) när det regnar. **Linoljefärg utvändigt** (panel/foder levereras grundade med linolja).
+  avslutar där). Målning i två omgångar: **omg. 1** (feb, kort ~110 h: spackel + slip + grund, **tak färdiga**, ytor bakom
+  kök/garderober – före parkett/inredning) och **omg. 2 (pMAL2) = flexibelt fönster mars–maj**: inne (väggarnas
+  slutstrykningar + linolja på snickerier, ej väderberoende) när det passar, ute linoljemålning när vädret tillåter (maj). **Linoljefärg utvändigt** (panel/foder levereras grundade med linolja).
   **Terrass + mark bakom huset (pTER, apr–maj) flyttad till etapp 1** – sista maskinjobbet bakom huset (maskin når inte
   dit när terrassen är byggd); natursten, granitplattor, blocksteg, **inga räcken**. Scheman räknas med `sched2.py`
   (scratch) – fönster: Utvändigt ≥15 mars, terrass ≥19 april, pMAL2 ≥26 april. Etapp 2: **trädgård september 2027** (efter inflytt): **färdiggräs i september** (svalt/regn, slipper

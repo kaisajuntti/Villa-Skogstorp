@@ -9,13 +9,15 @@ import Budget from "./pages/Budget.jsx";
 import Zone from "./pages/Zone.jsx";
 import Room from "./pages/Room.jsx";
 import Login from "./pages/Login.jsx";
+import Floors from "./pages/Floors.jsx";
 
-// Tiny hash router: #/ · #/projekt · #/budget[/etapp2] · #/omrade/<id> · #/rum/<id>
+// Tiny hash router: #/ · #/vaning/<kallare|plan1|plan2> · #/projekt · #/budget[/etapp2] · #/omrade/<id> · #/rum/<id>
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   const [seg, id] = h.split("/");
   if (seg === "projekt") return { page: "projekt" };
   if (seg === "budget") return { page: "budget", id: id === "etapp2" ? "budget2" : "budget" };
+  if (seg === "vaning") return { page: "vaning", id: id || "plan1" };
   if (seg === "omrade" && id) return { page: "omrade", id };
   if (seg === "rum" && id) return { page: "rum", id };
   return { page: "hem" };
@@ -64,6 +66,7 @@ function AppInner() {
       <nav className="nav">
         <a className="brand" href="#/">VILLA SKOGSTORP</a>
         <a className={"navlink" + (route.page === "hem" ? " active" : "")} href="#/">Översikt</a>
+        <a className={"navlink" + (route.page === "vaning" ? " active" : "")} href="#/vaning/plan1">Våningar</a>
         <a className={"navlink" + (route.page === "projekt" ? " active" : "")} href="#/projekt">Projekt</a>
         <a className={"navlink" + (route.page === "budget" ? " active" : "")} href="#/budget">Budget</a>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
@@ -75,6 +78,7 @@ function AppInner() {
       </nav>
       <div className={"main" + (isRoom ? " noscroll" : "")}>
         {route.page === "hem" && <Overview rooms={roomsApi.rooms} />}
+        {route.page === "vaning" && <Floors floorId={route.id} rooms={roomsApi.rooms} />}
         {route.page === "projekt" && <Project />}
         {route.page === "budget" && <Budget key={route.id} id={route.id} />}
         {route.page === "omrade" && <Zone zoneId={route.id} roomsApi={roomsApi} />}

@@ -38,6 +38,7 @@ Live URL: `https://kaisajuntti.github.io/Villa-Skogstorp/`.
 ```
 #/                  Översikt — clickable situationsplan snippet + zone legend
 #/projekt           Project-level: dokument, färgschema, anteckningar, export/import
+#/vaning/<id>       Våningar — kallare | plan1 | plan2: architect plan, tinted befintligt/tillbyggnad, clickable utrymmen
 #/budget            Budget & tidsplan — Etapp 1 (huset, till inflytt), space:budget
 #/budget/etapp2     Budget & tidsplan — Etapp 2 (efter inflytt), space:budget2
 #/omrade/<zoneId>   Zone: description + room list (add/rename/delete rooms)
@@ -141,7 +142,11 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   body = move it; drag a handle = move a corner; Yttervägg/Innervägg/Bredd apply to the selected wall; "Ta bort vägg"
   deletes it (+ its openings). "+ Ny vägg" starts drawing (taps add corners), "✓ Klar" ends. Openings are not
   draggable in Väggar/Mät mode (so they don't steal taps).
-- Next: floor view (Källare · Plan 1 · Plan 2) with clickable utrymme polygons from `floors.py`.
+- **Våningsvy (2026-10-04)** `src/pages/Floors.jsx`, nav "Våningar" + buttons on Översikt. Data behind login:
+  space record **`space:floors`** = `{ source, floors:[{ id, title, w, h, till:[[x,y]…], bef:[[x,y]…],
+  areas:[{ roomId, poly }] }] }` (image px of the floor image) and the floor images in **`vs:v1:bg:floor-<id>`**
+  ({dataUrl,w,h}, 150 dpi crops of the bygglov PDF). Labels = utrymme name without the "K ·/P1 ·/P2 ·" prefix (live
+  from `rooms`). Areas whose room is deleted are hidden. Polygon editing in-app = not built yet (edit via script).
 
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),

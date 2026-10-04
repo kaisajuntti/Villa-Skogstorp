@@ -40,6 +40,14 @@ export default function Overview({ rooms }) {
         <a href={cluster} target="_blank" rel="noreferrer">öppna bild</a>
       </p>
 
+      <h2>Våningar</h2>
+      <div className="row" style={{ marginBottom: 6 }}>
+        <a className="btn" href="#/vaning/kallare">Källare</a>
+        <a className="btn" href="#/vaning/plan1">Plan 1</a>
+        <a className="btn" href="#/vaning/plan2">Plan 2</a>
+      </div>
+      <p className="sub">Arkitektens planritningar med alla utrymmen klickbara.</p>
+
       <h2>Zoner</h2>
       <div className="cardlist">
         {ZONES.map((z) => (

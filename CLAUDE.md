@@ -200,9 +200,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   linoljefärg på snickerier) när det regnar. **Linoljefärg utvändigt** (panel/foder levereras grundade med linolja).
   **Terrass + mark bakom huset (pTER, apr–maj) flyttad till etapp 1** – sista maskinjobbet bakom huset (maskin når inte
   dit när terrassen är byggd); natursten, granitplattor, blocksteg, **inga räcken**. Scheman räknas med `sched2.py`
-  (scratch) – fönster: Utvändigt ≥15 mars, terrass ≥19 april, pMAL2 ≥26 april. **Färdiggräs (pGRAS) första veckan i juni** (efter terrass +
-  nedtagen ställning, timer-bevattning). Etapp 2: trädgård/plantering aug 2027 (efter
-  inflytt), garage/friggebod-grund hösten 2027 (inte bråttom), friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
+  (scratch) – fönster: Utvändigt ≥15 mars, terrass ≥19 april, pMAL2 ≥26 april. Etapp 2: **trädgård september 2027** (efter inflytt): **färdiggräs i september** (svalt/regn, slipper
+  sommarvattning och vattningsförbud), plantering, utebelysning, garage/friggebod-grund hösten 2027 (inte bråttom), friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
   (i dag aggregerad per benämning + enhet, sorterad på kr).

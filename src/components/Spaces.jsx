@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
 import { usePlanComments, usePlanItems, useRooms, loadPlanForPrint } from "../state.js";
@@ -365,5 +365,91 @@ export function Notes({ space, update, placeholder }) {
       onChange={ro ? undefined : (e) => update({ notes: e.target.value })}
       style={ro ? { background: "#faf8f3", color: "var(--ink)" } : undefined}
     />
+  );
+}
+
+// ---------- Inspirationsbilder (space.inspo = [{ id, title, photo, path, note }]) ----------
+// AI renders / mood images of how the finished room should look. Shown big in Dokument and
+// in a side panel next to the floor plan. Photos live in the public vs-photos bucket.
+export function InspoLightbox({ items, index, onClose }) {
+  const [i, setI] = useState(index);
+  useEffect(() => setI(index), [index]);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); if (e.key === "ArrowRight") setI((x) => (x + 1) % items.length); if (e.key === "ArrowLeft") setI((x) => (x - 1 + items.length) % items.length); };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, [items.length, onClose]);
+  const it = items[i]; if (!it) return null;
+  const nav = { position: "absolute", top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.9)", border: "none", borderRadius: 99, width: 44, height: 44, fontSize: 22, cursor: "pointer" };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(20,20,20,0.88)", zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <img src={it.photo} alt={it.title} style={{ maxWidth: "100%", maxHeight: "86vh", objectFit: "contain", borderRadius: 8 }} onClick={(e) => e.stopPropagation()} />
+      <div style={{ color: "#fff", marginTop: 10, fontSize: 14, textAlign: "center" }}>{it.title}{it.note ? " — " + it.note : ""} <span style={{ opacity: 0.6 }}>({i + 1}/{items.length})</span></div>
+      {items.length > 1 && <>
+        <button style={{ ...nav, left: 12 }} onClick={(e) => { e.stopPropagation(); setI((x) => (x - 1 + items.length) % items.length); }}>‹</button>
+        <button style={{ ...nav, right: 12 }} onClick={(e) => { e.stopPropagation(); setI((x) => (x + 1) % items.length); }}>›</button>
+      </>}
+      <button onClick={onClose} style={{ position: "absolute", top: 12, right: 12, background: "#fff", border: "none", borderRadius: 99, width: 40, height: 40, fontSize: 18, cursor: "pointer" }}>✕</button>
+    </div>
+  );
+}
+
+export function InspoGallery({ space, update }) {
+  const ro = !canEdit();
+  const items = space.inspo || [];
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [big, setBig] = useState(null);
+  const fileRef = useRef(null);
+  const set = (next) => update({ inspo: next });
+  const onPick = async (e) => {
+    const files = Array.from(e.target.files || []); e.target.value = "";
+    if (!files.length) return;
+    setBusy(true); setErr("");
+    try {
+      const added = [];
+      for (const f of files) {
+        const { url, path } = await uploadPhoto(f);
+        added.push({ id: Math.random().toString(36).slice(2, 9), title: f.name.replace(/\.[^.]+$/, ""), photo: url, path, note: "" });
+      }
+      set([...items, ...added]);
+    } catch (e2) { setErr(e2.message || "Kunde inte ladda upp bilden"); }
+    setBusy(false);
+  };
+  const patch = (i, p) => set(items.map((x, j) => (j === i ? { ...x, ...p } : x)));
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= items.length) return; const n = items.slice(); [n[i], n[j]] = [n[j], n[i]]; set(n); };
+  const remove = (i) => { if (!confirm("Ta bort bilden?")) return; if (items[i].path) deletePhoto(items[i].path); set(items.filter((_, j) => j !== i)); };
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <h3 style={{ margin: "4px 0 6px" }}>Inspirationsbilder</h3>
+      <p className="sub" style={{ marginTop: 0 }}>Så här tänker vi oss att det ser ut när det är klart (t.ex. AI-bilder, moodboards). Visas även bredvid planritningen.</p>
+      {!ro && (
+        <div className="row" style={{ marginBottom: 12 }}>
+          <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={onPick} />
+          <button className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? "Laddar upp …" : "✨ Ladda upp inspirationsbild"}</button>
+          {err && <span style={{ fontSize: 12, color: "var(--red)" }}>{err}</span>}
+        </div>
+      )}
+      {!items.length && <p className="sub">Inga inspirationsbilder ännu.</p>}
+      <div style={{ display: "grid", gap: 14 }}>
+        {items.map((it, i) => (
+          <div key={it.id || i} className="card" style={{ padding: 10 }}>
+            <img src={it.photo} alt={it.title} loading="lazy" onClick={() => setBig(i)}
+              style={{ display: "block", width: "100%", height: "auto", borderRadius: 8, cursor: "zoom-in", border: "1px solid var(--line)" }} />
+            {ro ? (
+              <div style={{ marginTop: 6 }}><strong>{it.title}</strong>{it.note ? <span className="sub"> — {it.note}</span> : null}</div>
+            ) : (
+              <div className="row" style={{ marginTop: 8, gap: 6 }}>
+                <input type="text" value={it.title || ""} placeholder="Titel" onChange={(e) => patch(i, { title: e.target.value })} style={{ flex: "1 1 160px" }} />
+                <input type="text" value={it.note || ""} placeholder="Anteckning …" onChange={(e) => patch(i, { note: e.target.value })} style={{ flex: "2 1 200px" }} />
+                <button className="btn small" onClick={() => move(i, -1)} disabled={i === 0}>↑</button>
+                <button className="btn small" onClick={() => move(i, 1)} disabled={i === items.length - 1}>↓</button>
+                <button className="btn small danger" onClick={() => remove(i)}>Ta bort</button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {big != null && <InspoLightbox items={items} index={big} onClose={() => setBig(null)} />}
+    </div>
   );
 }

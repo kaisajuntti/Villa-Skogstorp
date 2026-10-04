@@ -154,6 +154,13 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   ({dataUrl,w,h}, 150 dpi crops of the bygglov PDF). Labels = utrymme name without the "K ·/P1 ·/P2 ·" prefix (live
   from `rooms`). Areas whose room is deleted are hidden. Polygon editing in-app = not built yet (edit via script).
 
+### Inspirationsbilder (2026-10-04)
+- Space field **`inspo: [{id, title, photo, path, note}]`** (AI renders / moodboards of the finished room). `InspoGallery`
+  (Spaces.jsx) = own section at the top of Dokument (upload ✨, big images, title/note, ↑/↓, Ta bort); `InspoLightbox`
+  = full-screen viewer (‹ › / Esc). Room page Planritning tab shows them in a **column left of the planner**
+  (min(30%,420px); strip of thumbnails above the planner when < 760 px wide), toggle "✨ Inspo (n)" (per device,
+  `vs:v1:ui:inspoPanel`). Photos in the public `vs-photos` bucket like other photos.
+
 ### Photo uploads (Supabase Storage)
 - Real photo uploads live in a Supabase Storage bucket **`vs-photos`** (public read),
   not in the jsonb store — see `src/photos.js` (`uploadPhoto`/`deletePhoto`/`photoUrl`).

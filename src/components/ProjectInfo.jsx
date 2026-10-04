@@ -10,7 +10,7 @@ const rid = () => Math.random().toString(36).slice(2, 9);
 
 // Compact list of records; tap a row to edit it as a card.
 // `fields` = [{ k, label, wide?, multi?, type? }], `summary(r)` = collapsed rendering.
-function RowList({ rows, onChange, fields, addLabel, empty, summary }) {
+export function RowList({ rows, onChange, fields, addLabel, empty, summary }) {
   const ro = !canEdit();
   const [open, setOpen] = useState(null); // id of the expanded row
   const set = (i, k, v) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));

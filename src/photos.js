@@ -82,3 +82,33 @@ export async function deletePhoto(path) {
     });
   } catch { /* ignore */ }
 }
+
+// ---------- Private documents (bucket `vs-docs`, login required) ----------
+// Bilagor such as bygglov, kulturutlåtande, KA-handlingar, kontrakt. Never public:
+// opened through short-lived signed URLs.
+export const DOC_BUCKET = "vs-docs";
+const safeName = (n) => n.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80);
+export async function uploadDoc(file) {
+  const path = `${SUPABASE.workspace}/${rid()}-${safeName(file.name || "fil.pdf")}`;
+  const r = await fetch(`${base}/storage/v1/object/${DOC_BUCKET}/${encodeURI(path)}`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": file.type || "application/pdf", "x-upsert": "false" },
+    body: file,
+  });
+  if (!r.ok) throw new Error("Uppladdning misslyckades (HTTP " + r.status + ")");
+  return { path, size: file.size, type: file.type || "application/pdf" };
+}
+export async function signedDocUrl(path, expiresIn = 3600) {
+  const r = await fetch(`${base}/storage/v1/object/sign/${DOC_BUCKET}/${encodeURI(path)}`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ expiresIn }),
+  });
+  if (!r.ok) throw new Error("Kunde inte öppna filen (HTTP " + r.status + ")");
+  const j = await r.json();
+  return base + "/storage/v1" + j.signedURL;
+}
+export async function deleteDoc(path) {
+  if (!path) return;
+  try { await fetch(`${base}/storage/v1/object/${DOC_BUCKET}/${encodeURI(path)}`, { method: "DELETE", headers: await authHeaders() }); } catch { /* ignore */ }
+}

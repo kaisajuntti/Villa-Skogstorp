@@ -122,8 +122,20 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   `tech: [{id, area, choice, detail}]` (**Tekniska val**) — `src/components/ProjectInfo.jsx` (`RowList`:
   compact rows, tap → edit card, ↑/↓, Ta bort). Shown at the top of Projekt. Seeded by Claude (6 contacts,
   10 tech choices from the decisions in this file). Contacts = personal data → only in Supabase.
-- Next (step 2 cont.): våning + ordning per rum, projektbeskrivning/kapitel, bilagor (PDF → `vs-docs`),
-  beslutslogg; then step 3 = new project PDF.
+- **Projekt page = the project PDF, 1:1 (2026-10-04).** `src/pages/Project.jsx` (`PDF_SECTIONS`) +
+  `src/components/ProjectSections.jsx`. Sections, each a collapsible card with "I PDF" checkbox + "⬇ PDF" (single-section
+  PDF, wired in step 2): 1 Försättsblad (`cover` + cover image) · 2 Kontakter · 3 Projektbeskrivning (`chapters:[{id,title,
+  text,photos:[{id,photo?,path?,ref?,caption}]}]` — `ref` = private drawing bg key, e.g. `floor-plan1`,
+  `doc-bygglov-fasad-soder`; + project `inspo`) · 4 Tekniska val · 5 Beslutslogg (`decisions:[{id,date,area,decision,why}]`)
+  · 6 Arbetsplan & budget (LINKED from Budget: etapper, views, detail, prices on/off) · 7 Våningar & utrymmen (LINKED:
+  per floor overview on/off, per utrymme on/off + detail full|compact, inspo on/off) · 8 Färgschema · 9 Bilagor
+  (`attachments:[{id,title,path,size,type,on}]`, private bucket **vs-docs**, `uploadDoc/signedDocUrl/deleteDoc` in photos.js).
+  All PDF choices on the project space as `pdf = { <sectionId>: { on, …opts }, filename }` (synced). "Övrigt (ingår inte i
+  PDF:en)" at the bottom: situationsplan, Dokument & länkar, RoomsCommentBrowser (old PDF until step 2), kladd, backup.
+- Bygglov sheets (situationsplan, 4 fasader, sektioner, terrass, garage, 2 vyer) stored privately as `vs:v1:bg:doc-bygglov-*`
+  and listed in `space:floors.sheets`; the full bygglov PDF is attachment A in vs-docs. Chapters 1–5 + 23 decisions seeded
+  by Claude as drafts ("[Utkast …]"). **No colours/finishes are decided** — never write inspo colours into Färger.
+- Next = step 2: the new PDF generator (whole + per section) incl. pdf-lib merge of attachments.
 
 ### Våningar & utrymmen (2026-10)
 - New concept **utrymme** = one entry in `vs:v1:rooms` that may cover several rooms. 12 utrymmen drawn from the

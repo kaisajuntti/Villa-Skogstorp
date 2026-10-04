@@ -223,6 +223,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - **Prisbas: byggmaterial = Beijer inköp (specialpris) + 7 %, allt exkl. moms.** Plåt, el-, VVS-material och
   bergvärmepump köps **via respektive hantverkare** (deras grossistpris) – inte via Beijer. Snickare 580 kr/h (rör ej). **Materialstandard: alltid BRA grejer**
   (beställarens princip) – men räknat på Beijer-inköp. **Plattor/granitkeramik köps mycket billigt** (~200 kr/m² för plattan).
+- **Inga småposter** i budgeten (slang, spridare, verktyg o.d.) – bara poster som spelar roll.
 - **Utanför budgeten** (sköts vid sidan av): kontrollansvarig (KA), kommunens avgifter (bygglov/startbesked/slutbesked),
   lampor/armaturer. Ingen byggetablering (befintliga huset används).
 - Ansvariga: **Pelle** = snickare/totalentreprenör (default). **Linus** = fönster och dörrar, **målare** (eget yrke

@@ -142,8 +142,12 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   image) → Innehåll (TOC with page numbers + links, sections renumbered 1… among those included) → sections. Empty
   sections are skipped. Budget: per etapp summary figures, per fas (sums | rows | rows + material lines), material totalt,
   per yrke, leveranser, Gantt on a landscape page; `prices:false` hides every amount. Våningar: floor overview (floor image
-  + tints + labels drawn on canvas) then each utrymme — full = `addRoomPages` (the room 3-pager), compact = 1 page — +
-  its inspo grid. Bilagor: fetched via signed URL before rendering (page counts known), "Bilaga A" divider page, then
+  + tints + labels drawn on canvas) then each utrymme via **`renderRoom`** (compact flow, 2026-10-05 — the old 3-pager
+  spread one image per page): header · Beskrivning/Åtgärder · plan with numbered comment cards beside it · 4-col photo
+  thumbnails · 3-col inspo · links list · colour chips · inventory (commented objects as table, rest grouped on one line).
+  A room continues on the same page when header+text+plan fit. full = all of it, compact = text + plan (+ inspo).
+  **Budget order (2026-10-05): per etapp the Gantt first (landscape), then "Faser & tidsplan" (the phase list as on the
+  Budget page: name, när, arbete per yrke, kostnad), summary, yrken, leveranser, then poster per fas and material.** Bilagor: fetched via signed URL before rendering (page counts known), "Bilaga A" divider page, then
   **pdf-lib** inserts the attachment's pages after its divider. Attachment `mode`: `"full"` (default, pages included) or
   `"list"` (only named in the bilageförteckning, "Listad – separat" — e.g. A1 construction drawings). Current bilagor
   (2026-10-04, private vs-docs): A bygglovsbeslut, B strandskyddsdispens, C tomtplatsavgränsning, D antikvariskt utlåtande

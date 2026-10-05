@@ -8,7 +8,7 @@ import { storage, bgKey, spaceKey, roomsKey } from "../storage.js";
 import { loadPlanForPrint } from "../state.js";
 import { signedDocUrl } from "../photos.js";
 import { buildPlanSvg } from "./planSvg.js";
-import { newDoc, safe, hexToRgb, loadImg, svgToJpeg, fetchDataUrl, addRoomPages } from "./pdf.js";
+import { newDoc, safe, hexToRgb, loadImg, svgToJpeg, fetchDataUrl } from "./pdf.js";
 import { computeBudget, BUILDS, matLines, lineAmt, est, parseNum } from "../budgetCalc.js";
 
 const M = 14;
@@ -49,6 +49,9 @@ async function imageOf(p, maxPx) {
   return null;
 }
 
+// Keep at most n lines; mark the cut with "…".
+const clip = (lines, n) => (lines.length > n ? [...lines.slice(0, n - 1), String(lines[n - 1]).replace(/\s*\S*$/, "") + " …"] : lines);
+
 // ---------- page writer ----------
 function writer(doc) {
   const W = { doc, y: M, crumb: "", used: false, orient: "p" };
@@ -58,8 +61,10 @@ function writer(doc) {
   W.bottom = () => W.ph() - 16;
   W.page = () => doc.internal.getCurrentPageInfo().pageNumber;
   W.newPage = (orient = "p") => {
-    if (!W.used) W.used = true; // reuse jsPDF's initial blank page (always portrait)
-    else doc.addPage("a4", orient);
+    if (!W.used) { // reuse jsPDF's initial blank page (portrait); swap it for a landscape one if needed
+      W.used = true;
+      if (orient === "l") { doc.addPage("a4", "l"); doc.deletePage(1); }
+    } else doc.addPage("a4", orient);
     W.orient = orient;
     doc.setFillColor(...BLUE); doc.rect(0, 0, W.pw(), 4, "F");
     if (W.crumb) { doc.setTextColor(...BLUE); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.text(W.crumb.toUpperCase(), M, 11.5); }
@@ -68,9 +73,9 @@ function writer(doc) {
   W.ensure = (need) => { if (W.y + need > W.bottom()) W.newPage(W.orient); };
   W.font = (size, style = "normal", color = INK) => { doc.setFont("helvetica", style); doc.setFontSize(size); doc.setTextColor(...color); };
   // Section opener: new page, number + title.
-  W.h1 = (n, title) => {
+  W.h1 = (n, title, orient = "p") => {
     W.crumb = "Villa Skogstorp · " + title;
-    W.newPage("p");
+    W.newPage(orient);
     W.font(11, "bold", BLUE); if (n) doc.text(String(n), M, 30);
     W.font(22, "bold", INK); doc.text(title, M + (n ? 9 : 0), 30);
     doc.setDrawColor(...BLUE); doc.setLineWidth(0.8); doc.line(M, 34, M + 26, 34);
@@ -121,14 +126,14 @@ function writer(doc) {
     W.y += 3;
   };
   // Image grid: cells of equal width, row height = tallest (capped), captions + optional notes.
-  W.grid = (cells, cols = 2, maxH = 80) => {
-    const gap = 5, cw = (W.cw() - gap * (cols - 1)) / cols;
+  W.grid = (cells, cols = 2, maxH = 80, noteLines = 6) => {
+    const gap = cols > 2 ? 4 : 5, cw = (W.cw() - gap * (cols - 1)) / cols;
     for (let i = 0; i < cells.length; i += cols) {
       const row = cells.slice(i, i + cols);
       const hs = row.map((c) => (c.img ? Math.min(maxH, cw * c.img.ratio) : 0));
       const ih = Math.max(...hs, 0);
       W.font(8.5, "normal", TXT);
-      const texts = row.map((c) => [c.title ? doc.splitTextToSize(c.title, cw) : [], c.note ? doc.splitTextToSize(c.note, cw).slice(0, 6) : []]);
+      const texts = row.map((c) => [c.title ? clip(doc.splitTextToSize(c.title, cw), 2) : [], c.note ? clip(doc.splitTextToSize(c.note, cw), noteLines) : []]);
       const th = Math.max(...texts.map(([a, b]) => a.length * 4 + b.length * 3.8), 0);
       W.ensure(ih + th + 6);
       row.forEach((c, k) => {
@@ -141,8 +146,8 @@ function writer(doc) {
         }
         yy += ih + 4;
         const [tl, nl] = texts[k];
-        if (tl.length) { W.font(9, "bold", INK); doc.text(tl, x, yy); yy += tl.length * 4; }
-        if (nl.length) { W.font(8.3, "normal", MUTED); doc.text(nl, x, yy); }
+        if (tl.length) { W.font(cols > 2 ? 8 : 9, "bold", INK); doc.text(tl, x, yy); yy += tl.length * 4; }
+        if (nl.length) { W.font(cols > 2 ? 7.5 : 8.3, "normal", MUTED); doc.text(nl, x, yy); }
       });
       W.y += ih + th + 8;
     }
@@ -308,10 +313,10 @@ function renderDecisions(W, P, n, title) {
 }
 
 // ---- budget ----
-function gantt(W, B, title) {
+function gantt(W, B, title, fresh = false) {
   const { doc } = W;
   if (!B.dated.length) return;
-  W.newPage("l");
+  if (!fresh) W.newPage("l");
   W.font(13, "bold", BLUE); doc.text(title, M, W.y); W.y += 6;
   const all = [...B.dated.flatMap((p) => [+new Date(p.start + "T00:00:00"), +new Date(p.end + "T23:59:59")]), ...Object.values(B.typSegs).flat().map((s) => s.end), ...B.deliveries.map((d) => d.t)];
   const minT = Math.min(...all), maxT = Math.max(...all), span = maxT - minT || 1;
@@ -333,7 +338,7 @@ function gantt(W, B, title) {
     d.setMonth(d.getMonth() + 1);
   }
   let y = top;
-  const label = (t, color = INK, bold = false) => { W.font(fs, bold ? "bold" : "normal", color); doc.text(doc.splitTextToSize(t, LW - 3)[0] || "", M, y + rh * 0.68); };
+  const label = (t, color = INK, bold = false) => { W.font(fs, bold ? "bold" : "normal", color); doc.text(clip(doc.splitTextToSize(t, LW - 3), 1)[0] || "", M, y + rh * 0.68); };
   B.phases.forEach((p, i) => {
     label(`${i + 1}. ${p.name}`);
     doc.setFillColor(...SOFT); doc.rect(x0, y + rh * 0.2, cw, rh * 0.6, "F");
@@ -373,14 +378,38 @@ function gantt(W, B, title) {
   W.y += 6;
 }
 
-function renderBudgetEtapp(W, b, etapp, opt, first) {
+// Per etapp: Gantt (landscape) first, then the phases as listed on the Budget page, then the details.
+function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
   const B = computeBudget(b);
   const prices = opt.prices !== false;
   const views = opt.views || ["summary", "gantt", "phases"];
   const detail = opt.detail || "rows";
   const etTitle = ETAPP_TITLE[etapp] || etapp;
-  if (!first) W.newPage("p");
+  const when = (p) => (p.start && p.end ? fmtD(p.start) + " – " + fmtD(p.end) + " " + p.end.slice(2, 4) : "");
+  const typSum = (pid) => {
+    const o = {};
+    for (const it of B.items) if (it.phaseId === pid) for (const [t, h] of Object.entries(B.hoursByTyp(it))) o[t] = (o[t] || 0) + h;
+    return Object.entries(o).map(([t, h]) => t + " " + hF(h)).join("\n");
+  };
+  const ganttOn = views.includes("gantt") && B.dated.length;
+  if (first) {
+    W.h1(n, title, ganttOn ? "l" : "p");
+    if (ganttOn) { W.y -= 4; gantt(W, B, "Tidplan – " + etTitle, true); W.newPage("p"); }
+  } else if (ganttOn) { W.newPage("l"); gantt(W, B, "Tidplan – " + etTitle, true); W.newPage("p"); }
+  else W.newPage("p");
   W.h2(etTitle, prices ? kr(B.total) + " ex moms" : hF(B.hours));
+  if (prices) W.note("Alla belopp exklusive moms. Byggmaterial räknat på inköpspris; el-, VVS-material och plåt via respektive hantverkare.");
+
+  // Faser & tidsplan – same list as on the Budget page
+  W.h3("Faser & tidsplan");
+  {
+    const cols = [{ label: "#", w: 7 }, { label: "Fas" }, { label: "När", w: 30 }, { label: "Arbete", w: 36 }];
+    if (prices) cols.push({ label: "Kostnad", w: 26, align: "right" });
+    const rows = B.phases.map((p, i) => { const r = [String(i + 1), p.name, when(p), typSum(p.id)]; if (prices) r.push(kr(B.phaseCost[p.id] || 0)); return r; });
+    const tot = ["", "Totalt", "", hF(B.hours) + (B.hours ? "\nca " + Math.ceil(B.hours / 105) + " veckor (3 pers)" : "")]; if (prices) tot.push(kr(B.total));
+    rows.push({ cells: tot, bold: true });
+    W.table(cols, rows, { size: 8.6 });
+  }
 
   if (views.includes("summary")) {
     W.h3("Sammanfattning");
@@ -392,58 +421,6 @@ function renderBudgetEtapp(W, b, etapp, opt, first) {
     W.figures(fig, 3);
     const builds = BUILDS.filter((x) => B.byBuild[x]);
     if (prices && builds.length > 1) W.table([{ label: "Per byggnad" }, { label: "Summa", w: 40, align: "right" }], builds.map((x) => [x, kr(B.byBuild[x])]));
-  }
-  if (views.includes("phases")) {
-    W.h3("Per fas");
-    const when = (p) => (p.start && p.end ? fmtD(p.start) + " – " + fmtD(p.end) + " " + p.end.slice(2, 4) : "");
-    if (detail === "sums") {
-      const cols = [{ label: "#", w: 8 }, { label: "Fas" }, { label: "När", w: 38 }, { label: "Timmar", w: 22, align: "right" }];
-      if (prices) cols.push({ label: "Summa", w: 30, align: "right" });
-      const rows = B.phases.map((p, i) => { const r = [String(i + 1), p.name, when(p), B.phaseHrs[p.id] ? hF(B.phaseHrs[p.id]) : "–"]; if (prices) r.push(kr(B.phaseCost[p.id] || 0)); return r; });
-      const tot = ["", "Totalt", "", hF(B.hours)]; if (prices) tot.push(kr(B.total));
-      rows.push({ cells: tot, bold: true });
-      W.table(cols, rows);
-    } else {
-      const cols = [{ label: "Post" }, { label: "Ansvarig", w: 22 }];
-      if (prices) cols.push({ label: "Material", w: 24, align: "right" }, { label: "Extern", w: 24, align: "right" });
-      cols.push({ label: "Arbete", w: 34 });
-      if (prices) cols.push({ label: "Summa", w: 25, align: "right" });
-      B.phases.forEach((p, i) => {
-        const its = B.items.filter((it) => it.phaseId === p.id);
-        if (!its.length) return;
-        W.ensure(24);
-        W.h3(`${i + 1}. ${p.name}`, [when(p), B.phaseHrs[p.id] ? hF(B.phaseHrs[p.id]) : "", prices ? kr(B.phaseCost[p.id] || 0) : ""].filter(Boolean).join("  ·  "));
-        const rows = [];
-        for (const it of its) {
-          const work = B.workOf(it).filter((w) => parseNum(w.h)).map((w) => w.typ + " " + nf(parseNum(w.h)) + " h").join("\n") || (it.category === "Arbete" ? "Snickare " + nf(parseNum(it.qty)) + " h" : "");
-          const desc = (it.oklart ? "[OKLART] " : "") + (it.desc || "–") + (it.del ? "  (" + it.del + ")" : "") + (prices && it.extNote ? "\nExtern: " + it.extNote : "");
-          const r = [desc, it.entreprenor || ""];
-          if (prices) r.push(est(it) ? kr(est(it)) : "", B.extOf(it) ? kr(B.extOf(it)) : "");
-          r.push(work);
-          if (prices) r.push(kr(B.current(it)));
-          rows.push({ cells: r, fill: it.oklart ? OKL : null });
-          if (detail === "lines" && matLines(it)) {
-            for (const l of matLines(it)) {
-              const q = parseNum(l.qty) ? nf(parseNum(l.qty), 1) + " " + (l.unit || "") : "";
-              const lr = [(l.desc || "Material") + (q ? "  –  " + q : "") + (prices && parseNum(l.qty) && l.price ? " × " + l.price + " kr" : "") + (l.leverans ? "  (lev. " + l.leverans + ")" : ""), ""];
-              if (prices) lr.push(kr(lineAmt(l)), "");
-              lr.push("");
-              if (prices) lr.push("");
-              rows.push({ cells: lr, muted: true, size: 7.8, indent: 4 });
-            }
-          }
-        }
-        W.table(cols, rows, { size: 8.6 });
-      });
-      const orphan = B.items.filter((it) => !B.phases.some((p) => p.id === it.phaseId));
-      if (orphan.length) W.note(`${orphan.length} poster saknar fas och visas inte här.`);
-    }
-  }
-  if (views.includes("material")) {
-    W.h3("Material totalt", prices ? kr(B.materials.reduce((s, r) => s + r.sum, 0)) : "");
-    const cols = [{ label: "Material" }, { label: "Total mängd", w: 26, align: "right" }, { label: "Enhet", w: 18 }];
-    if (prices) cols.push({ label: "Summa", w: 28, align: "right" });
-    W.table(cols, B.materials.map((r) => { const x = [r.desc, r.qty ? nf(r.qty, 1) : "–", r.unit]; if (prices) x.push(kr(r.sum)); return x; }), { size: 8.6 });
   }
   if (views.includes("trades")) {
     W.h3("Per yrke – timmar & bemanning");
@@ -464,16 +441,57 @@ function renderBudgetEtapp(W, b, etapp, opt, first) {
     W.h3("Leveranser");
     W.table([{ label: "Datum", w: 24 }, { label: "Vad" }, { label: "Fas", w: 55 }], B.deliveries.map((d) => [d.date, d.desc, B.phaseName(d.it.phaseId)]), { size: 8.6 });
   }
-  if (views.includes("gantt")) gantt(W, B, "Tidplan – " + etTitle);
+  if (views.includes("phases") && detail !== "sums") {
+    W.newPage("p");
+    W.h2("Poster per fas – " + etTitle);
+    const cols = [{ label: "Post" }, { label: "Ansvarig", w: 22 }];
+    if (prices) cols.push({ label: "Material", w: 24, align: "right" }, { label: "Extern", w: 24, align: "right" });
+    cols.push({ label: "Arbete", w: 34 });
+    if (prices) cols.push({ label: "Summa", w: 25, align: "right" });
+    B.phases.forEach((p, i) => {
+      const its = B.items.filter((it) => it.phaseId === p.id);
+      if (!its.length) return;
+      W.ensure(24);
+      W.h3(`${i + 1}. ${p.name}`, [when(p), B.phaseHrs[p.id] ? hF(B.phaseHrs[p.id]) : "", prices ? kr(B.phaseCost[p.id] || 0) : ""].filter(Boolean).join("  ·  "));
+      const rows = [];
+      for (const it of its) {
+        const work = B.workOf(it).filter((w) => parseNum(w.h)).map((w) => w.typ + " " + nf(parseNum(w.h)) + " h").join("\n") || (it.category === "Arbete" ? "Snickare " + nf(parseNum(it.qty)) + " h" : "");
+        const desc = (it.oklart ? "[OKLART] " : "") + (it.desc || "–") + (it.del ? "  (" + it.del + ")" : "") + (prices && it.extNote ? "\nExtern: " + it.extNote : "");
+        const r = [desc, it.entreprenor || ""];
+        if (prices) r.push(est(it) ? kr(est(it)) : "", B.extOf(it) ? kr(B.extOf(it)) : "");
+        r.push(work);
+        if (prices) r.push(kr(B.current(it)));
+        rows.push({ cells: r, fill: it.oklart ? OKL : null });
+        if (detail === "lines" && matLines(it)) {
+          for (const l of matLines(it)) {
+            const q = parseNum(l.qty) ? nf(parseNum(l.qty), 1) + " " + (l.unit || "") : "";
+            const lr = [(l.desc || "Material") + (q ? "  –  " + q : "") + (prices && parseNum(l.qty) && l.price ? " × " + l.price + " kr" : "") + (l.leverans ? "  (lev. " + l.leverans + ")" : ""), ""];
+            if (prices) lr.push(kr(lineAmt(l)), "");
+            lr.push("");
+            if (prices) lr.push("");
+            rows.push({ cells: lr, muted: true, size: 7.8, indent: 4 });
+          }
+        }
+      }
+      W.table(cols, rows, { size: 8.6 });
+    });
+    const orphan = B.items.filter((it) => !B.phases.some((p) => p.id === it.phaseId));
+    if (orphan.length) W.note(`${orphan.length} poster saknar fas och visas inte här.`);
+  }
+  if (views.includes("material")) {
+    W.ensure(40);
+    W.h3("Material totalt – " + etTitle, prices ? kr(B.materials.reduce((s, r) => s + r.sum, 0)) : "");
+    const cols = [{ label: "Material" }, { label: "Total mängd", w: 26, align: "right" }, { label: "Enhet", w: 18 }];
+    if (prices) cols.push({ label: "Summa", w: 28, align: "right" });
+    W.table(cols, B.materials.map((r) => { const x = [r.desc, r.qty ? nf(r.qty, 1) : "–", r.unit]; if (prices) x.push(kr(r.sum)); return x; }), { size: 8.6 });
+  }
 }
 
 function renderBudget(W, P, n, title, budgets) {
   const opt = P.pdf.budget || {};
   const etapper = (opt.etapper || ["budget"]).filter((e) => budgets[e]?.items?.length);
   if (!etapper.length) return false;
-  W.h1(n, title);
-  if (opt.prices !== false) W.note("Alla belopp exklusive moms. Byggmaterial räknat på inköpspris; el-, VVS-material och plåt via respektive hantverkare.");
-  etapper.forEach((e, i) => renderBudgetEtapp(W, budgets[e], e, opt, i === 0));
+  etapper.forEach((e, i) => renderBudgetEtapp(W, budgets[e], e, opt, i === 0, n, title));
   return true;
 }
 
@@ -522,6 +540,134 @@ async function roomData(room) {
   };
 }
 
+// Image titles that are just camera/upload ids ("880B0935-7BBE-…") are not shown.
+const noUuid = (t) => (/^[0-9A-F]{8}-[0-9A-F-]{10,}$/i.test(String(t || "").trim()) ? "" : t);
+// Height of the first row of a W.grid (image + ~3 text lines), for keeping a heading with it.
+const gridRowH = (W, cells, cols, maxH) => {
+  const cw = (W.cw() - 4 * (cols - 1)) / cols;
+  return Math.max(0, ...cells.slice(0, cols).map((c) => Math.min(maxH, cw * c.img.ratio))) + 16;
+};
+
+// One utrymme, compact: header · text · plan with the numbered comments beside it · then small
+// thumbnail grids (dokumentbilder, inspiration), links, colours and the inventory as tight lists.
+// A room starts on the current page when at least ~45 % of it is left.
+async function renderRoom(W, d, name, full, inspoOn, sectionTitle) {
+  const { doc } = W;
+  W.crumb = "Villa Skogstorp · " + sectionTitle;
+  let plan = null;
+  try { const r = await svgToJpeg(d.svgString, 1400, d.bgImg, d.bgT); plan = { data: r.dataUrl, ratio: r.ratio }; } catch { /* no plan */ }
+  const comments = full ? d.comments : [];
+  const pw = comments.length ? W.cw() * 0.52 : Math.min(W.cw() * 0.7, 125);
+  const planH = plan ? Math.min(110, pw * plan.ratio) : 0;
+  // Start on this page only if header + texts + plan fit in what is left; otherwise a fresh page.
+  W.font(9, "normal", TXT);
+  const textH = [d.description, d.actions].filter((t) => (t || "").trim()).reduce((h, t) => h + 6 + doc.splitTextToSize(t, W.cw()).length * 4.1, 0);
+  const need = 12 + textH + planH + 6;
+  if (W.y > 30 && W.y + need > W.bottom()) W.newPage("p");
+  else if (W.y > 30) { doc.setDrawColor(...BLUE); doc.setLineWidth(0.5); doc.line(M, W.y - 2, W.pw() - M, W.y - 2); W.y += 5; }
+  W.font(15, "bold", INK); doc.text(clip(doc.splitTextToSize(name, W.cw()), 1)[0], M, W.y + 2); W.y += 9;
+
+  const txt = (title, t) => { if (!(t || "").trim()) return; W.font(8.5, "bold", BLUE); W.ensure(8); doc.text(title.toUpperCase(), M, W.y); W.y += 4.2; W.para(t, { size: 9, lh: 4.1 }); };
+  txt("Beskrivning", d.description);
+  txt("Åtgärder", d.actions);
+
+  // plan + comment cards
+  const thumbs = await Promise.all(comments.map(async (c) => (c.photo ? toJpeg(await fetchDataUrl(c.photo), 500) : null)));
+  if (plan) {
+    let w = pw, h = w * plan.ratio; if (h > 110) { h = 110; w = h / plan.ratio; }
+    W.ensure(h + 4);
+    const top = W.y;
+    doc.addImage(plan.data, "JPEG", M, top, w, h);
+    doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.rect(M, top, w, h);
+    // cards to the right of the plan, then in two columns below it
+    const card = (c, i, x, y, cw, ch) => {
+      doc.setFillColor(...SOFT); doc.setDrawColor(...LINE); doc.setLineWidth(0.2); doc.roundedRect(x, y, cw, ch, 1.2, 1.2, "FD");
+      doc.setFillColor(...BLUE); doc.circle(x + 3.2, y + 3.4, 2.1, "F");
+      W.font(6.5, "bold", [255, 255, 255]); doc.text(String(i + 1), x + 3.2, y + 3.4, { align: "center", baseline: "middle" });
+      let tx = x + 6.5, tw = cw - 8;
+      const t = thumbs[i];
+      if (t) { let iw = Math.min(26, (ch - 3) / t.ratio), ih = iw * t.ratio; doc.addImage(t.data, "JPEG", x + 6.5, y + 1.5, iw, ih); tx = x + 6.5 + iw + 2; tw = x + cw - 1.5 - tx; }
+      W.font(7.3, "normal", TXT);
+      const lines = clip(doc.splitTextToSize((c.text || "").trim() || (c.photo ? "Bild" : ""), Math.max(10, tw)), Math.max(1, Math.floor((ch - 2) / 3.1)));
+      doc.text(lines, tx, y + 4);
+    };
+    const ch = 21, gap = 2.5;
+    const rx = M + pw + 4, rw = W.cw() - pw - 4;
+    let i = 0, yy = top;
+    while (i < comments.length && yy + ch <= top + h + 0.1) { card(comments[i], i, rx, yy, rw, ch); yy += ch + gap; i++; }
+    W.y = Math.max(top + h, yy) + 4;
+    const cw2 = (W.cw() - 4) / 2;
+    while (i < comments.length) {
+      W.ensure(ch + gap);
+      card(comments[i], i, M, W.y, cw2, ch); i++;
+      if (i < comments.length) { card(comments[i], i, M + cw2 + 4, W.y, cw2, ch); i++; }
+      W.y += ch + gap;
+    }
+    W.y += 2;
+  }
+  if (full) {
+    const photos = d.docs.filter((x) => x && x.photo);
+    if (photos.length) {
+      const cells = await Promise.all(photos.map(async (x) => ({ img: await toJpeg(await fetchDataUrl(x.photo), 700), title: noUuid(x.title), note: x.note })));
+      const ok = cells.filter((c) => c.img);
+      if (ok.length) { W.ensure(gridRowH(W, ok, 4, 34) + 8); W.font(8.5, "bold", BLUE); doc.text("BILDER", M, W.y); W.y += 3; W.grid(ok, 4, 34, 3); }
+    }
+  }
+  if (inspoOn && d.inspo.length) {
+    const cells = await Promise.all(d.inspo.map(async (p) => ({ img: await imageOf(p, 900), title: noUuid(p.title), note: p.note })));
+    const ok = cells.filter((c) => c.img);
+    if (ok.length) {
+      W.ensure(gridRowH(W, ok, 3, 48) + 8);
+      W.font(8.5, "bold", BLUE); doc.text("INSPIRATION", M, W.y);
+      W.font(7.5, "italic", MUTED); doc.text("första utkast – inget beslutat", M + 25, W.y); W.y += 3;
+      W.grid(ok, 3, 48, 3);
+    }
+  }
+  if (full) {
+    const links = d.docs.filter((x) => x && x.url);
+    if (links.length) {
+      W.font(8.5, "bold", BLUE); W.ensure(12); doc.text("LÄNKAR", M, W.y); W.y += 4.2;
+      for (const l of links) {
+        W.ensure(4.5);
+        W.font(8.3, "bold", INK); const t = clip(doc.splitTextToSize(String(l.title || l.url), 70), 1)[0]; doc.text(t, M, W.y);
+        W.font(7.8, "normal", BLUE); const u = clip(doc.splitTextToSize(String(l.url), W.cw() - 74), 1)[0]; doc.textWithLink(u, M + 74, W.y, { url: l.url });
+        W.y += 4;
+        if (l.note) { W.font(7.5, "normal", MUTED); doc.text(clip(doc.splitTextToSize(String(l.note), W.cw() - 74), 2), M + 74, W.y); W.y += Math.min(2, doc.splitTextToSize(String(l.note), W.cw() - 74).length) * 3.3; }
+      }
+      W.y += 3;
+    }
+    if (d.colors.length) {
+      W.font(8.5, "bold", BLUE); W.ensure(14); doc.text("FÄRGER & MATERIAL", M, W.y); W.y += 3;
+      let x = M;
+      for (const c of d.colors) {
+        if (x + 45 > W.pw() - M) { x = M; W.y += 9; }
+        W.ensure(9);
+        const rgb = hexToRgb(c.hex); doc.setFillColor(rgb.r, rgb.g, rgb.b); doc.setDrawColor(...LINE); doc.rect(x, W.y, 9, 6, "FD");
+        W.font(7.5, "bold", INK); doc.text(clip(doc.splitTextToSize(String(c.name || c.hex), 33), 1)[0], x + 11, W.y + 2.6);
+        W.font(6.8, "normal", MUTED); doc.text(String(c.hex || "").toUpperCase(), x + 11, W.y + 5.6);
+        x += 46;
+      }
+      W.y += 11;
+    }
+    // Inventory: objects with a comment/link as a table; the rest grouped on one line ("Lådor 600×600 ×3, …").
+    const named = (d.items || []).filter((it) => it && it.t && it.t.trim());
+    const withNote = named.filter((it) => d.inventory[it.id]?.note || d.inventory[it.id]?.url);
+    const plain = named.filter((it) => !withNote.includes(it));
+    if (named.length) {
+      W.font(8.5, "bold", BLUE); W.ensure(14); doc.text("INVENTARIER", M, W.y); W.y += 1.5;
+      if (withNote.length) W.table([{ label: "Objekt", w: 48 }, { label: "Mått", w: 26 }, { label: "Kommentar / länk" }],
+        withNote.map((it) => { const m = d.inventory[it.id] || {}; return [it.t.trim(), `${it.w}×${it.h}`, [m.note, m.url].filter(Boolean).join("  ")]; }), { size: 7.6 });
+      else W.y += 3;
+      if (plain.length) {
+        const g = new Map();
+        for (const it of plain) { const k = it.t.trim() + " " + Math.min(it.w, it.h) + "×" + Math.max(it.w, it.h); g.set(k, (g.get(k) || 0) + 1); }
+        W.para([...g].map(([k, c]) => k + (c > 1 ? " ×" + c : "")).join(" · "), { size: 7.6, color: MUTED, lh: 3.5 });
+      }
+    }
+  }
+  W.y += 6;
+}
+
 async function renderFloors(W, P, n, title, floorsRec, rooms, progress) {
   const opt = P.pdf.floors || {};
   const ovOff = opt.overviewOff || [];
@@ -553,31 +699,7 @@ async function renderFloors(W, P, n, title, floorsRec, rooms, progress) {
       progress?.("Utrymme – " + short(r.name));
       const d = await roomData(r);
       const name = (g.floor ? g.floor.title + " · " : "") + short(r.name);
-      if ((ropt[r.id]?.detail || "full") === "full") {
-        await addRoomPages(doc, { ...d, roomName: name, cover: {} }, false);
-        W.y = W.ph(); // whatever comes next starts on a new page
-      } else {
-        W.crumb = "Villa Skogstorp · " + title;
-        W.newPage("p");
-        W.font(18, "bold", INK); doc.text(name, M, W.y + 4); W.y += 12;
-        try {
-          const { dataUrl, ratio } = await svgToJpeg(d.svgString, 1400, d.bgImg, d.bgT);
-          W.image({ data: dataUrl, ratio }, { maxW: W.cw() * 0.7, maxH: 115 });
-        } catch { /* no plan */ }
-        if (d.description.trim()) { W.h3("Beskrivning"); W.para(d.description, { size: 9.5 }); }
-        if (d.actions.trim()) { W.h3("Sammanfattning av åtgärder"); W.para(d.actions, { size: 9.5 }); }
-      }
-      if (opt.inspo !== false && d.inspo.length) {
-        const cells = await Promise.all(d.inspo.map(async (p) => ({ img: await imageOf(p, 1400), title: p.title, note: p.note })));
-        const ok = cells.filter((c) => c.img);
-        if (ok.length) {
-          W.crumb = "Villa Skogstorp · " + title;
-          if (W.y > W.bottom() - 60) W.newPage("p");
-          W.h2("Inspiration – " + short(r.name));
-          W.note("Inspirationsbilder / första utkast – inga kulörer eller material är beslutade utifrån dessa.");
-          W.grid(ok, 2, 85);
-        }
-      }
+      await renderRoom(W, d, name, (ropt[r.id]?.detail || "full") === "full", opt.inspo !== false, title);
       firstOnPage = false;
     }
   }

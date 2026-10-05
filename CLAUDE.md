@@ -271,10 +271,10 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   without material show "+ material". Line `leverans` dates feed the Gantt/Materialleveranser.
   **El and VVS are own yrken (hours × 625 + material), not Extern** — Extern is only for truly bought-in
   services (kommun, åkeri, plåtslagare, borrfirma, konstruktör …).
-  **pRIVF "Rivning invändigt + murstock – löpande"** (2026-10): background phase from 15 Oct to the day
+  **pRIVF "Rivning invändigt + murstock – löpande"** (2026-10): background phase from byggstart (26 Oct) to the day
   before Renovering befintlig; done when time allows and **excluded from the critical-path chain**
   (p0∥p1 → Grund → Stomme …). p1 = only what must go day 1 (friggebod in the way of schakt, carport,
-  källartrappa). Goal: **tätt hus på tillbyggnaden före jul** (Stomme ends ~17 Dec).
+  källartrappa). Goal: **tätt hus på tillbyggnaden före jul** (Stomme ends ~10 Dec).
   **7 h/dag/person is deliberate slack** (vs 8 h ≈ 10 %) — don't add a separate buffer on top.
 - **Etapp 2** (`#/budget/etapp2`, record `space:budget2`, same component via `id` prop; tabs at
   top switch etapp). Etapp 2 = after inflytt: Fokus 1 terrass (one OPLANERAD lump-sum row) +
@@ -289,6 +289,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Röda dagar 2027 (6/1, 26/3, 29/3, 6/5, 25/6) räknas bort. Garage/friggebod/terrass flyttade till etapp 2;
   rivning av friggebod + carport ligger kvar i etapp 1. Matjord bakom tillbyggnaden läggs i etapp 1
   (maskin når inte dit efteråt).
+- **Byggstart flyttad till 26 okt 2026 (beslut 2026-10-05)** – hela kedjan omräknad med `sched2.py` (start-param); tätt hus ~10 dec, Installationer över jullovet till 12 jan, KLART 31 maj oförändrat (april/maj-fönstren låg fast).
 - **Tidsplan v2 (beslutat 2026-10-04): mål KLART/BEBOELIGT 31 maj 2027**, juni = buffert, inflytt jul–aug.
   Omlott mellan husdelarna: Renovering befintlig startar när snickarna är klara i tillbyggnaden (plattsättaren
   avslutar där). Målning i två omgångar: **omg. 1** (feb, kort ~110 h: spackel + slip + grund, **tak färdiga**, ytor bakom
@@ -296,14 +297,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   slutstrykningar + linolja på snickerier, ej väderberoende) när det passar, ute linoljemålning när vädret tillåter (maj). **Linoljefärg utvändigt** (panel/foder levereras grundade med linolja).
   **Terrass + mark bakom huset (pTER, apr–maj) flyttad till etapp 1** – sista maskinjobbet bakom huset (maskin når inte
   dit när terrassen är byggd); natursten, granitplattor, blocksteg, **inga räcken**. Scheman räknas med `sched2.py`
-  (scratch) – Utvändigt direkt efter Inredning (~1 mars), **grund garage + friggebod (pGARG) flyttad från etapp 2 till
-  ~30 mars–1 april** (tjälfri mark, fyller snickarhålet), terrass ≥12 april (natursten ligger i terrassfasen),
+  (scratch) – Utvändigt direkt efter Inredning (~11 mars), **grund garage + friggebod (pGARG) flyttad från etapp 2 till
+  ~5–7 april** (tjälfri mark, fyller snickarhålet), terrass ≥12 april (natursten ligger i terrassfasen),
   målarens flexibla fönster mars–maj. Etapp 2: **trädgård september 2027** (efter inflytt): **färdiggräs i september** (svalt/regn, slipper
   sommarvattning och vattningsförbud), plantering, utebelysning, friggebod + garage jan 2028, **gårdsplan gatsten 2028 efter garaget**.
-- **Maskinschema (beslutat 2026-10-04)** – maskinen ska inte stå still: p0 (15–26 okt) steg 1–3 gårdsplan/runt källaren/
-  schakt källare → **pMASK** (parallellt med grunden 27 okt–12 nov) steg 4–7: trädgård grovplanering med egna massor,
+- **Maskinschema (beslutat 2026-10-04)** – maskinen ska inte stå still: p0 (26 okt–4 nov) steg 1–3 gårdsplan/runt källaren/
+  schakt källare → **pMASK** (parallellt med grunden 5–23 nov) steg 4–7: trädgård grovplanering med egna massor,
   matjord i **upplag**, terrass bilning + schakt, höjden bakom terrassen, garage schakt + bärlager (= upplagsplats under
-  bygget) → pMARK2 (13–19 nov) steg 8: ledningsgravar + återfyllning runt källaren (minigrävare räcker) → **april:
+  bygget) → pMARK2 (24 nov–2 dec) steg 8: ledningsgravar + återfyllning runt källaren (minigrävare räcker) → **april:
   minigrävare ~2 d** (matjorden ut bakom huset + fyllning bakom terrassmurarna, innan terrassen stänger vägen).
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas

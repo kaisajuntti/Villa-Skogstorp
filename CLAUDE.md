@@ -147,7 +147,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   thumbnails · 3-col inspo · links list · colour chips · inventory (commented objects as table, rest grouped on one line).
   A room continues on the same page when header+text+plan fit. full = all of it, compact = text + plan (+ inspo).
   **Budget order (2026-10-05): per etapp the Gantt first (landscape), then "Faser & tidsplan" (the phase list as on the
-  Budget page: name, när, arbete per yrke, kostnad), summary, yrken, leveranser, then poster per fas and material.** Bilagor: fetched via signed URL before rendering (page counts known), "Bilaga A" divider page, then
+  Budget page: name, när, arbete per yrke, kostnad), summary, yrken, leveranser, then poster per fas and material.** Poster per fas shows each row's **material lines expanded** under it
+  (default detail = "lines", 6.9 pt sub-rows spanning Post+Ansvarig; a lone anonymous "Material" line is skipped); long
+  phase titles wrap instead of running into the date/sum text (`W.h3`). Bilagor: fetched via signed URL before rendering (page counts known), "Bilaga A" divider page, then
   **pdf-lib** inserts the attachment's pages after its divider. Attachment `mode`: `"full"` (default, pages included) or
   `"list"` (only named in the bilageförteckning, "Listad – separat" — e.g. A1 construction drawings). Current bilagor
   (2026-10-04, private vs-docs): A bygglovsbeslut, B strandskyddsdispens, C tomtplatsavgränsning, D antikvariskt utlåtande

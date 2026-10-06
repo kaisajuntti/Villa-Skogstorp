@@ -89,10 +89,14 @@ function writer(doc) {
     W.y += 8;
   };
   W.h3 = (title, right) => {
-    W.ensure(12);
-    W.font(10.5, "bold", INK); doc.text(title, M, W.y);
+    W.font(9, "normal", MUTED);
+    const rw = right ? doc.getTextWidth(right) + 5 : 0;
+    W.font(10.5, "bold", INK);
+    const lines = doc.splitTextToSize(title, W.cw() - rw); // wrap instead of running into the right-hand text
+    W.ensure(7 + lines.length * 4.6);
+    doc.text(lines, M, W.y);
     if (right) { W.font(9, "normal", MUTED); doc.text(right, W.pw() - M, W.y, { align: "right" }); }
-    W.y += 5.5;
+    W.y += 1 + lines.length * 4.6;
   };
   // Paragraph text: blank line = paragraph gap, "- "/"• " lines = bullets.
   W.para = (text, { size = 10.5, color = TXT, lh = size * 0.5 } = {}) => {
@@ -172,8 +176,10 @@ function writer(doc) {
       const r = Array.isArray(r0) ? { cells: r0 } : r0;
       const fs = r.size || size, rlh = fs * 0.43;
       W.font(fs, r.bold ? "bold" : "normal", r.muted ? MUTED : INK);
-      const lines = r.cells.map((cell, i) => doc.splitTextToSize(String(cell ?? ""), ws[i] - 2 * pad - (i === 0 ? r.indent || 0 : 0)));
-      const h = Math.max(1, ...lines.map((l) => l.length)) * rlh + 2 * pad + 0.6;
+      const cw0 = (i) => (r.span && i === 0 ? ws[0] + ws[1] : ws[i]);
+      const lines = r.cells.map((cell, i) => (r.span && i === 1 ? [] : doc.splitTextToSize(String(cell ?? ""), cw0(i) - 2 * pad - (i === 0 ? r.indent || 0 : 0))));
+      const vp = r.pad ?? pad; // vertical padding (sub-rows are tighter)
+      const h = Math.max(1, ...lines.map((l) => l.length)) * rlh + 2 * vp + 0.6;
       if (W.y + h > W.bottom()) { W.newPage(W.orient); drawHead(); W.font(fs, r.bold ? "bold" : "normal", r.muted ? MUTED : INK); }
       if (r.fill) { doc.setFillColor(...r.fill); doc.rect(M, W.y, W.cw(), h, "F"); }
       let x = M;
@@ -181,12 +187,12 @@ function writer(doc) {
         const al = cols[i].align === "right";
         const tx = al ? x + ws[i] - pad : x + pad + (i === 0 ? r.indent || 0 : 0);
         if (r.tag && i === 0) { doc.setTextColor(...RED); }
-        doc.text(l, tx, W.y + pad + rlh * 0.8, { align: al ? "right" : "left" });
+        doc.text(l, tx, W.y + vp + rlh * 0.8, { align: al ? "right" : "left" });
         if (r.tag && i === 0) doc.setTextColor(...(r.muted ? MUTED : INK));
         x += ws[i];
       });
       W.y += h;
-      doc.setDrawColor(...LINE); doc.setLineWidth(0.15); doc.line(M, W.y, M + W.cw(), W.y);
+      if (!r.noLine) { doc.setDrawColor(...LINE); doc.setLineWidth(0.15); doc.line(M, W.y, M + W.cw(), W.y); }
     }
     W.y += 5;
   };
@@ -383,7 +389,7 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
   const B = computeBudget(b);
   const prices = opt.prices !== false;
   const views = opt.views || ["summary", "gantt", "phases"];
-  const detail = opt.detail || "rows";
+  const detail = opt.detail || "lines";
   const etTitle = ETAPP_TITLE[etapp] || etapp;
   const when = (p) => (p.start && p.end ? fmtD(p.start) + " – " + fmtD(p.end) + " " + p.end.slice(2, 4) : "");
   const typSum = (pid) => {
@@ -444,14 +450,14 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
   if (views.includes("phases") && detail !== "sums") {
     W.newPage("p");
     W.h2("Poster per fas – " + etTitle);
-    const cols = [{ label: "Post" }, { label: "Ansvarig", w: 22 }];
-    if (prices) cols.push({ label: "Material", w: 24, align: "right" }, { label: "Extern", w: 24, align: "right" });
-    cols.push({ label: "Arbete", w: 34 });
-    if (prices) cols.push({ label: "Summa", w: 25, align: "right" });
+    const cols = [{ label: "Post" }, { label: "Ansvarig", w: 17 }];
+    if (prices) cols.push({ label: "Material", w: 20, align: "right" }, { label: "Extern", w: 20, align: "right" });
+    cols.push({ label: "Arbete", w: 27 });
+    if (prices) cols.push({ label: "Summa", w: 21, align: "right" });
     B.phases.forEach((p, i) => {
       const its = B.items.filter((it) => it.phaseId === p.id);
       if (!its.length) return;
-      W.ensure(24);
+      W.ensure(38); // keep the phase heading together with its table header + first row
       W.h3(`${i + 1}. ${p.name}`, [when(p), B.phaseHrs[p.id] ? hF(B.phaseHrs[p.id]) : "", prices ? kr(B.phaseCost[p.id] || 0) : ""].filter(Boolean).join("  ·  "));
       const rows = [];
       for (const it of its) {
@@ -461,19 +467,23 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
         if (prices) r.push(est(it) ? kr(est(it)) : "", B.extOf(it) ? kr(B.extOf(it)) : "");
         r.push(work);
         if (prices) r.push(kr(B.current(it)));
-        rows.push({ cells: r, fill: it.oklart ? OKL : null });
-        if (detail === "lines" && matLines(it)) {
-          for (const l of matLines(it)) {
+        let ml = detail === "lines" ? matLines(it) : null;
+        // a single anonymous line ("Material", 1 post) adds nothing to the row itself
+        if (ml && ml.length === 1 && /^(material)?$/i.test((ml[0].desc || "").trim())) ml = null;
+        rows.push({ cells: r, fill: it.oklart ? OKL : null, pad: 1.1, noLine: !!ml });
+        if (ml) {
+          // material lines, as when a row is expanded on the Budget page
+          ml.forEach((l, k) => {
             const q = parseNum(l.qty) ? nf(parseNum(l.qty), 1) + " " + (l.unit || "") : "";
-            const lr = [(l.desc || "Material") + (q ? "  –  " + q : "") + (prices && parseNum(l.qty) && l.price ? " × " + l.price + " kr" : "") + (l.leverans ? "  (lev. " + l.leverans + ")" : ""), ""];
+            const lr = ["– " + (l.desc || "Material") + (q ? "   " + q : "") + (prices && parseNum(l.qty) && l.price ? " × " + nf(parseNum(l.price)) + " kr" : "") + (l.leverans ? "   lev. " + l.leverans : ""), ""];
             if (prices) lr.push(kr(lineAmt(l)), "");
             lr.push("");
             if (prices) lr.push("");
-            rows.push({ cells: lr, muted: true, size: 7.8, indent: 4 });
-          }
+            rows.push({ cells: lr, muted: true, size: 6.9, indent: 3, pad: 0.35, span: true, fill: it.oklart ? OKL : null, noLine: k < ml.length - 1 });
+          });
         }
       }
-      W.table(cols, rows, { size: 8.6 });
+      W.table(cols, rows, { size: 7.8 });
     });
     const orphan = B.items.filter((it) => !B.phases.some((p) => p.id === it.phaseId));
     if (orphan.length) W.note(`${orphan.length} poster saknar fas och visas inte här.`);

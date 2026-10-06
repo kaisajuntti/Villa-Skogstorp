@@ -335,7 +335,7 @@ export function BudgetOptions({ opts, sum }) {
         ))}
       </div>
       <label style={{ fontSize: 13 }}>Detaljnivå i fas-vyn{" "}
-        <select disabled={ro} value={s.detail || "rows"} onChange={(e) => opts.setSec("budget", { detail: e.target.value })} style={{ width: "auto", padding: "4px 6px" }}>
+        <select disabled={ro} value={s.detail || "lines"} onChange={(e) => opts.setSec("budget", { detail: e.target.value })} style={{ width: "auto", padding: "4px 6px" }}>
           <option value="sums">Bara summor per fas</option>
           <option value="rows">Rader</option>
           <option value="lines">Rader + materialrader</option>

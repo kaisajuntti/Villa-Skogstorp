@@ -9,7 +9,7 @@ import { loadPlanForPrint } from "../state.js";
 import { signedDocUrl } from "../photos.js";
 import { buildPlanSvg } from "./planSvg.js";
 import { newDoc, safe, hexToRgb, loadImg, svgToJpeg, fetchDataUrl } from "./pdf.js";
-import { computeBudget, BUILDS, matLines, lineAmt, est, parseNum } from "../budgetCalc.js";
+import { computeBudget, BUILDS, matLines, lineAmt, est, parseNum, PARTS, WHO } from "../budgetCalc.js";
 
 const M = 14;
 const INK = [51, 49, 46], BLUE = [90, 122, 140], MUTED = [122, 117, 110], LINE = [214, 208, 198], SOFT = [246, 243, 237], TXT = [70, 66, 62], RED = [154, 74, 58], OKL = [251, 243, 228];
@@ -425,6 +425,25 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
     const ds = B.dated.map((p) => p.start).sort(), de = B.dated.map((p) => p.end).sort();
     if (ds.length) fig.push(["Tidsram", fmtD(ds[0]) + " " + ds[0].slice(0, 4) + " – " + fmtD(de[de.length - 1]) + " " + de[de.length - 1].slice(0, 4)]);
     W.figures(fig, 3);
+    // Byggdel × Pelle/Linus
+    const parts = [...PARTS, ["", "Ej angiven byggdel"]].filter(([k]) => B.split[k]);
+    if (prices && parts.length) {
+      const k0 = (n) => (n ? nf(Math.round(n / 1000)) : "–");
+      const sum = (o) => (o ? o.Material + o.Extern + o.Arbete : 0);
+      const add = (a, b) => ({ Material: (a?.Material || 0) + (b?.Material || 0), Extern: (a?.Extern || 0) + (b?.Extern || 0), Arbete: (a?.Arbete || 0) + (b?.Arbete || 0) });
+      const cell = (o) => (sum(o) ? k0(sum(o)) + "\nM " + k0(o.Material) + " · A " + k0(o.Arbete) + (o.Extern ? " · E " + k0(o.Extern) : "") : "–");
+      let tp = {}, tl = {};
+      const rows = parts.map(([k, label]) => {
+        const pe = B.split[k]?.Pelle, li = B.split[k]?.Linus;
+        tp = add(tp, pe); tl = add(tl, li);
+        return [label, cell(pe), cell(li), cell(add(pe, li))];
+      });
+      rows.push({ cells: ["Totalt", cell(tp), cell(tl), cell(add(tp, tl))], bold: true });
+      W.ensure(50);
+      W.h3("Fördelning – byggdel × ansvarig (tkr)");
+      W.table([{ label: "Byggdel" }, ...WHO.map((w) => ({ label: w, w: 40, align: "right" })), { label: "Totalt", w: 40, align: "right" }], rows, { size: 8.4 });
+      W.note("M = material · A = arbete · E = extern. Ansvarig på budgetraden avgör Pelle/Linus; en materialrad kan ha egen \"köps av\". Gemensamt = påverkar både befintligt hus och tillbyggnad (tak, bergvärme, ställning …).");
+    }
     const builds = BUILDS.filter((x) => B.byBuild[x]);
     if (prices && builds.length > 1) W.table([{ label: "Per byggnad" }, { label: "Summa", w: 40, align: "right" }], builds.map((x) => [x, kr(B.byBuild[x])]));
   }

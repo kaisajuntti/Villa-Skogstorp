@@ -3,7 +3,7 @@ import { useSpace, useRooms } from "../state.js";
 import { spaceKey } from "../storage.js";
 import { canEdit } from "../config.js";
 import VersionHistory from "../components/VersionHistory.jsx";
-import { DELAR, delOrder, DEFAULT_RATES, LEGACY_TYP, parseNum, lineAmt, matLines, est, legacyH, addWorkdays } from "../budgetCalc.js";
+import { DELAR, delOrder, DEFAULT_RATES, LEGACY_TYP, parseNum, lineAmt, matLines, est, legacyH, addWorkdays, computeBudget, PARTS, PART_SHORT, WHO, whoOf } from "../budgetCalc.js";
 
 // Budget lives in its own space record → syncs + versions like the rest.
 // Etapp 1 (huset, fram till inflytt) = space:budget · Etapp 2 (efter inflytt) = space:budget2.
@@ -74,6 +74,50 @@ function WorkCell({ work, typs, ro, onChange }) {
         </div>
       ))}
       <button className="btn small" style={{ padding: "1px 6px", alignSelf: "flex-start", fontSize: 11 }} onClick={() => onChange([...list, { typ: typs[0] || "Snickare", h: "" }])}>+ yrke</button>
+    </div>
+  );
+}
+
+// Byggdel × Pelle/Linus: material / extern / arbete per cell (kr).
+function SplitTable({ split }) {
+  const parts = [...PARTS, ["", "Ej angiven byggdel"]].filter(([k]) => split[k]);
+  if (!parts.length) return null;
+  const z = { Material: 0, Extern: 0, Arbete: 0 };
+  const sum = (o) => (o ? o.Material + o.Extern + o.Arbete : 0);
+  const tot = {}; for (const w of WHO) tot[w] = { ...z };
+  for (const [k] of parts) for (const w of WHO) for (const c of Object.keys(z)) tot[w][c] += split[k]?.[w]?.[c] || 0;
+  const k0 = (n) => (n ? new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n / 1000)) : "–");
+  const Cell = ({ o, strong }) => (
+    <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", borderLeft: "1px solid var(--line)", fontWeight: strong ? 700 : 400 }}>
+      <div>{k0(sum(o))}</div>
+      {sum(o) > 0 && <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 400 }}>M {k0(o.Material)} · A {k0(o.Arbete)}{o.Extern ? " · E " + k0(o.Extern) : ""}</div>}
+    </td>
+  );
+  const rowTot = (o1, o2) => ({ Material: (o1?.Material || 0) + (o2?.Material || 0), Extern: (o1?.Extern || 0) + (o2?.Extern || 0), Arbete: (o1?.Arbete || 0) + (o2?.Arbete || 0) });
+  return (
+    <div style={{ overflowX: "auto", marginTop: 12 }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: 460 }}>
+        <thead><tr>
+          <th style={th()}>Byggdel (tkr)</th>
+          {WHO.map((w) => <th key={w} style={{ ...th("right"), borderLeft: "1px solid var(--line)" }}>{w}</th>)}
+          <th style={{ ...th("right"), borderLeft: "1px solid var(--line)" }}>Totalt</th>
+        </tr></thead>
+        <tbody>
+          {parts.map(([k, label]) => (
+            <tr key={k} style={{ borderTop: "1px solid var(--line)" }}>
+              <td style={td()}>{label}</td>
+              {WHO.map((w) => <Cell key={w} o={split[k]?.[w]} />)}
+              <Cell o={rowTot(split[k]?.Pelle, split[k]?.Linus)} strong />
+            </tr>
+          ))}
+          <tr style={{ borderTop: "1.5px solid var(--ink)" }}>
+            <td style={{ ...td(), fontWeight: 700 }}>Totalt</td>
+            {WHO.map((w) => <Cell key={w} o={tot[w]} strong />)}
+            <Cell o={rowTot(tot.Pelle, tot.Linus)} strong />
+          </tr>
+        </tbody>
+      </table>
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>M = material · A = arbete · E = extern. Ansvarig på raden avgör Pelle/Linus; en materialrad kan ha egen "Köps av".</div>
     </div>
   );
 }
@@ -186,6 +230,10 @@ export default function Budget({ id = "budget" }) {
     groups = names.map((n) => ({ key: n, label: n, preset: { entreprenor: n }, items: items.filter((i) => (i.entreprenor || "").trim() === n) }));
     const none = items.filter((i) => !(i.entreprenor || "").trim());
     if (none.length || !names.length) groups.push({ key: "_none", label: "Ej angiven ansvarig", preset: { entreprenor: "" }, items: none });
+  } else if (groupBy === "part") {
+    groups = PARTS.map(([k, label]) => ({ key: k, label, preset: { part: k }, items: items.filter((i) => i.part === k) }));
+    const none = items.filter((i) => !PARTS.some(([k]) => k === i.part));
+    if (none.length) groups.push({ key: "_none", label: "Ej angiven byggdel", preset: { part: "" }, items: none });
   } else if (groupBy === "room") {
     groups = [
       { key: "", label: OVERGRIP, preset: { roomId: "" }, items: items.filter((i) => !i.roomId) },
@@ -243,7 +291,7 @@ export default function Budget({ id = "budget" }) {
       <td colSpan={NCOLS} style={{ padding: "2px 6px 8px 28px" }}>
         <table style={{ borderCollapse: "collapse", fontSize: 12 }}>
           <thead><tr>
-            <th style={th()}>Material</th><th style={th("right")}>Mängd</th><th style={th()}>Enhet</th><th style={th("right")}>Á-pris</th><th style={th("right")}>Summa</th><th style={th()}>Materialleverans</th>{!ro && <th></th>}
+            <th style={th()}>Material</th><th style={th("right")}>Mängd</th><th style={th()}>Enhet</th><th style={th("right")}>Á-pris</th><th style={th("right")}>Summa</th><th style={th()}>Köps av</th><th style={th()}>Materialleverans</th>{!ro && <th></th>}
           </tr></thead>
           <tbody>
             {matLines(it).map((l, j) => (
@@ -253,6 +301,13 @@ export default function Budget({ id = "budget" }) {
                 <td style={td()}>{ro ? l.unit : <input type="text" value={l.unit || ""} placeholder="m²…" onChange={(e) => patchLine(it, j, { unit: e.target.value })} style={{ ...cell, width: 48 }} />}</td>
                 <td style={td("right")}>{ro ? l.price : <input type="text" inputMode="decimal" value={l.price || ""} onChange={(e) => patchLine(it, j, { price: e.target.value })} style={{ ...cell, width: 70, textAlign: "right" }} />}</td>
                 <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap" }}>{kr(lineAmt(l))}</td>
+                <td style={td()}>{ro ? (l.buyer || whoOf(it)) : (
+                  <select value={l.buyer || ""} title="Vem köper materialet (tomt = radens ansvarig)" onChange={(e) => patchLine(it, j, { buyer: e.target.value || undefined })}
+                    style={{ ...sel, padding: "3px 2px", fontSize: 11, color: l.buyer ? "var(--ink)" : "var(--muted)" }}>
+                    <option value="">({whoOf(it)})</option>
+                    {WHO.map((w) => <option key={w} value={w}>{w}</option>)}
+                  </select>
+                )}</td>
                 <td style={td()}>{ro ? (l.leverans || "—") : <input type="date" value={l.leverans || ""} onChange={(e) => patchLine(it, j, { leverans: e.target.value })} style={{ ...sel, padding: "3px 1px", width: 110, fontSize: 11 }} />}</td>
                 {!ro && <td style={td()}><button className="btn small" style={{ padding: "0 5px", border: "none" }} title="Ta bort materialrad"
                   onClick={() => { const m = matLines(it).filter((_, k) => k !== j); patchItem(it.id, m.length ? { mat: m } : { mat: [], qty: "", unit: "", estUnit: "" }); }}>✕</button></td>}
@@ -274,6 +329,14 @@ export default function Budget({ id = "budget" }) {
           {ro ? <span style={{ color: it.del ? "var(--ink)" : "var(--muted)" }}>{it.del || "—"}</span> : (
             <input type="text" list="budget-delar" value={it.del || ""} placeholder="+ del" title="Del/byggdel"
               onChange={(e) => patchItem(it.id, { del: e.target.value })} style={{ ...TAG, width: 86, ...(it.del ? {} : TAG_EMPTY) }} />
+          )}
+          <span style={{ color: "var(--muted)" }}>·</span>
+          {ro ? <span style={{ color: it.part ? "var(--ink)" : "var(--muted)" }}>{PART_SHORT[it.part] || "—"}</span> : (
+            <select value={it.part || ""} title="Byggdel: tillbyggnad, renovering befintligt, gemensamt (hela huset) eller mark/terrass/garage"
+              onChange={(e) => patchItem(it.id, { part: e.target.value })} style={{ ...TAG, maxWidth: 104, ...(it.part ? {} : TAG_EMPTY) }}>
+              <option value="">+ byggdel</option>
+              {PARTS.map(([k]) => <option key={k} value={k}>{PART_SHORT[k]}</option>)}
+            </select>
           )}
           <span style={{ color: "var(--muted)" }}>·</span>
           {ro ? <span style={{ color: it.roomId ? "var(--ink)" : "var(--muted)" }}>{roomName(it.roomId)}</span> : (
@@ -402,6 +465,7 @@ export default function Budget({ id = "budget" }) {
             <span key={buildName}>{buildName}: <span className="mono" style={{ color: "var(--ink)" }}>{kr(byBuild[buildName])}</span></span>
           ))}
         </div>
+        <SplitTable split={computeBudget({ ...space, rates }).split} />
       </div>
 
       {/* yrken: timpris + bemanning */}
@@ -522,7 +586,7 @@ export default function Budget({ id = "budget" }) {
       <h2>Poster</h2>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         <span className="sub" style={{ margin: 0 }}>Visa efter:</span>
-        {[["phase", "Fas"], ["del", "Del"], ["room", "Rum"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
+        {[["phase", "Fas"], ["part", "Byggdel"], ["del", "Del"], ["room", "Rum"], ["ent", "Ansvarig"], ["material", "Material totalt"]].map(([k, l]) => (
           <button key={k} className={"btn small" + (groupBy === k ? " primary" : "")} onClick={() => setGroupBy(k)}>{l}</button>
         ))}
       </div>

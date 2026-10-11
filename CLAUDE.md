@@ -312,6 +312,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   matjord i **upplag**, terrass bilning + schakt, höjden bakom terrassen, garage schakt + bärlager (= upplagsplats under
   bygget) → pMARK2 (24 nov–2 dec) steg 8: ledningsgravar + återfyllning runt källaren (minigrävare räcker) → **april:
   minigrävare ~2 d** (matjorden ut bakom huset + fyllning bakom terrassmurarna, innan terrassen stänger vägen).
+- **Byggdel + köps av (2026-10-11)**: row field **`part`** = T Tillbyggnad · R Renovering befintligt · **G Gemensamt (hela
+  huset – påverkar både befintligt och tillbyggnad: plåttak, bergvärme, ställning, målning, garderober …)** · M Mark/terrass/
+  garage (tag select under the description, empty highlighted; "Visa efter: Byggdel"). Responsibility = `entreprenor`
+  (Ansvarig; anything but "Linus" counts as Pelle); a material line may override with **`buyer`** ("Köps av" column).
+  `computeBudget().split[part][Pelle|Linus] = {Material, Extern, Arbete}` → matrix in the Budget summary card and in the
+  PDF summary ("Fördelning – byggdel × ansvarig"). **Linus** = måleri, snickerier (platsbyggt, invändiga foder/bänkar/
+  sockel), fönster/dörrar, kök, vitvaror, kamin, badrumsinredning + material lines granitkeramik/kakel/trägolv/heltäckning.
+  Seeded by Claude as a first proposal (owner adjusts per row). **Tapet is not in the budget yet.**
 - Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
   (i dag aggregerad per benämning + enhet, sorterad på kr).

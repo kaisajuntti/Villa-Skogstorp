@@ -25,6 +25,13 @@ export const legacyH = (it) => (it.category === "Arbete" && /tim/i.test(it.unit 
 export const isWork = (d) => { const w = d.getDay(), m = d.getMonth(), day = d.getDate(); return w > 0 && w < 6 && !((m === 11 && day >= 22) || (m === 0 && day <= 4)); };
 export const addWorkdays = (start, n) => { const d = new Date(start); while (!isWork(d)) d.setDate(d.getDate() + 1); for (let i = 1; i < n; i++) { d.setDate(d.getDate() + 1); while (!isWork(d)) d.setDate(d.getDate() + 1); } return d; };
 
+// Byggdel per row (`part`) and who is responsible/buys (`entreprenor` = Ansvarig; a material line may
+// override with `buyer`). Gemensamt = affects both the old house and the extension (tak, bergvärme …).
+export const PARTS = [["T", "Tillbyggnad"], ["R", "Renovering befintligt"], ["G", "Gemensamt (hela huset)"], ["M", "Mark, terrass, garage"]];
+export const PART_SHORT = { T: "Tillbyggnad", R: "Renovering", G: "Gemensamt", M: "Mark/terrass" };
+export const WHO = ["Pelle", "Linus"];
+export const whoOf = (it) => (/^\s*linus\s*$/i.test(it.entreprenor || "") ? "Linus" : "Pelle");
+
 // Cost split by building, from the phase name.
 export const buildOfName = (n) => (/garage/i.test(n) ? "Garage" : /friggebod/i.test(n) ? "Friggebod" : /terrass/i.test(n) ? "Terrass"
   : /trädgård|gårdsplan/i.test(n) ? "Trädgård" : "Huvudbostad");
@@ -65,6 +72,22 @@ export function computeBudget(b) {
     phaseHrs[it.phaseId] = (phaseHrs[it.phaseId] || 0) + h;
   }
 
+  // Byggdel × Pelle/Linus × Material/Extern/Arbete
+  const split = {};
+  const add = (part, who, cat, v) => {
+    if (!v) return;
+    const a = ((split[part] = split[part] || {})[who] = split[part][who] || { Material: 0, Extern: 0, Arbete: 0 });
+    a[cat] += v;
+  };
+  for (const it of items) {
+    const part = it.part || "", who = whoOf(it);
+    const m = matLines(it);
+    if (m) for (const l of m) add(part, l.buyer || who, "Material", lineAmt(l));
+    else add(part, who, legacyH(it) ? "Arbete" : "Material", est(it));
+    add(part, who, "Extern", extOf(it));
+    add(part, who, "Arbete", laborCost(it));
+  }
+
   // Per yrke within each dated phase: works from phase start for ceil(h / (crew × 7)) workdays.
   const dated = phases.filter((p) => p.start && p.end);
   const typSegs = {};
@@ -100,6 +123,6 @@ export function computeBudget(b) {
 
   return {
     phases, items, rates, typs, rateOf, crewOf, workOf, laborCost, extOf, current, hoursByTyp, hoursOf, phaseName,
-    total, hours, oklart, byCat, byBuild, byTypH, phaseCost, phaseHrs, dated, typSegs, typRows, deliveries, materials,
+    total, hours, oklart, split, byCat, byBuild, byTypH, phaseCost, phaseHrs, dated, typSegs, typRows, deliveries, materials,
   };
 }

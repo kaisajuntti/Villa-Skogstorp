@@ -25,8 +25,8 @@ export const legacyH = (it) => (it.category === "Arbete" && /tim/i.test(it.unit 
 export const isWork = (d) => { const w = d.getDay(), m = d.getMonth(), day = d.getDate(); return w > 0 && w < 6 && !((m === 11 && day >= 22) || (m === 0 && day <= 4)); };
 export const addWorkdays = (start, n) => { const d = new Date(start); while (!isWork(d)) d.setDate(d.getDate() + 1); for (let i = 1; i < n; i++) { d.setDate(d.getDate() + 1); while (!isWork(d)) d.setDate(d.getDate() + 1); } return d; };
 
-// Byggdel per row (`part`) and who is responsible/buys (`entreprenor` = Ansvarig; a material line may
-// override with `buyer`). Gemensamt = affects both the old house and the extension (tak, bergvärme …).
+// Byggdel per row (`part`) and who buys the material (`entreprenor` = Ansvarig; a material line may
+// override with `buyer`). Labour is split by trade: Målare = Linus, every other trade = Pelle. Gemensamt = affects both the old house and the extension (tak, bergvärme …).
 export const PARTS = [["T", "Tillbyggnad"], ["R", "Renovering befintligt"], ["G", "Gemensamt (hela huset)"], ["M", "Mark, terrass, garage"]];
 export const PART_SHORT = { T: "Tillbyggnad", R: "Renovering", G: "Gemensamt", M: "Mark/terrass" };
 export const WHO = ["Pelle", "Linus"];
@@ -85,7 +85,9 @@ export function computeBudget(b) {
     if (m) for (const l of m) add(part, l.buyer || who, "Material", lineAmt(l));
     else add(part, who, legacyH(it) ? "Arbete" : "Material", est(it));
     add(part, who, "Extern", extOf(it));
-    add(part, who, "Arbete", laborCost(it));
+    // Labour: Pelle's crew mounts and lays everything (also Linus' kitchen, windows, plattor …);
+    // only the painter (Målare) is Linus'.
+    for (const w of workOf(it)) add(part, w.typ === "Målare" ? "Linus" : "Pelle", "Arbete", parseNum(w.h) * rateOf(w.typ));
   }
 
   // Per yrke within each dated phase: works from phase start for ceil(h / (crew × 7)) workdays.

@@ -117,7 +117,7 @@ function SplitTable({ split }) {
           </tr>
         </tbody>
       </table>
-      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>M = material · A = arbete · E = extern. Ansvarig på raden avgör Pelle/Linus; en materialrad kan ha egen "Köps av".</div>
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>M = material · A = arbete · E = extern. Material: radens Ansvarig (en materialrad kan ha egen "Köps av"). Arbete: Pelle monterar allt – bara Målare räknas som Linus.</div>
     </div>
   );
 }

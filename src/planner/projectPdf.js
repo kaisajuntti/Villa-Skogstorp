@@ -442,7 +442,7 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
       W.ensure(50);
       W.h3("Fördelning – byggdel × ansvarig (tkr)");
       W.table([{ label: "Byggdel" }, ...WHO.map((w) => ({ label: w, w: 40, align: "right" })), { label: "Totalt", w: 40, align: "right" }], rows, { size: 8.4 });
-      W.note("M = material · A = arbete · E = extern. Ansvarig på budgetraden avgör Pelle/Linus; en materialrad kan ha egen \"köps av\". Gemensamt = påverkar både befintligt hus och tillbyggnad (tak, bergvärme, ställning …).");
+      W.note("M = material · A = arbete · E = extern. Material: budgetradens ansvarig (en materialrad kan ha egen \"köps av\"). Arbete: Pelle monterar allt – bara målning räknas som Linus. Gemensamt = påverkar både befintligt hus och tillbyggnad (tak, bergvärme, ställning …).");
     }
     const builds = BUILDS.filter((x) => B.byBuild[x]);
     if (prices && builds.length > 1) W.table([{ label: "Per byggnad" }, { label: "Summa", w: 40, align: "right" }], builds.map((x) => [x, kr(B.byBuild[x])]));

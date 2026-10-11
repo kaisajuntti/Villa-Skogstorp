@@ -316,6 +316,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   huset – påverkar både befintligt och tillbyggnad: plåttak, bergvärme, ställning, målning, garderober …)** · M Mark/terrass/
   garage (tag select under the description, empty highlighted; "Visa efter: Byggdel"). Responsibility = `entreprenor`
   (Ansvarig; anything but "Linus" counts as Pelle); a material line may override with **`buyer`** ("Köps av" column).
+  **Labour is split by trade: Målare = Linus, all other trades = Pelle** (Pelle's crew mounts Linus' kök/fönster/dörrar/
+  garderober and lays granitkeramik – owner 2026-10-11). Tapet: not budgeted on purpose (väggar räknas som målade tills
+  annat beslutas, vägg för vägg). **Oklart** = only "unsure if the row is needed" (not price uncertainty) – cleaned 2026-10-11, 7 rows left.
   `computeBudget().split[part][Pelle|Linus] = {Material, Extern, Arbete}` → matrix in the Budget summary card and in the
   PDF summary ("Fördelning – byggdel × ansvarig"). **Linus** = måleri, snickerier (platsbyggt, invändiga foder/bänkar/
   sockel), fönster/dörrar, kök, vitvaror, kamin, badrumsinredning + material lines granitkeramik/kakel/trägolv/heltäckning.

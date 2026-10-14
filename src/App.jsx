@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRooms } from "./state.js";
 import { isUnlocked, canEdit, currentUser } from "./config.js";
-import { logout } from "./auth.js";
+import { logout, isRecoveryLink } from "./auth.js";
 import { syncPull } from "./storage.js";
 import Overview from "./pages/Overview.jsx";
 import Project from "./pages/Project.jsx";
@@ -10,12 +10,16 @@ import Zone from "./pages/Zone.jsx";
 import Room from "./pages/Room.jsx";
 import Login from "./pages/Login.jsx";
 import Floors from "./pages/Floors.jsx";
+import Expenses from "./pages/Expenses.jsx";
+import { ChangePassword, RecoverPassword } from "./pages/Account.jsx";
 
-// Tiny hash router: #/ · #/vaning/<kallare|plan1|plan2> · #/projekt · #/budget[/etapp2] · #/omrade/<id> · #/rum/<id>
+// Tiny hash router: #/ · #/vaning/<kallare|plan1|plan2> · #/projekt · #/budget[/etapp2] · #/utgifter · #/konto · #/omrade/<id> · #/rum/<id>
 function parseHash() {
   const h = window.location.hash.replace(/^#\/?/, "");
   const [seg, id] = h.split("/");
   if (seg === "projekt") return { page: "projekt" };
+  if (seg === "utgifter") return { page: "utgifter" };
+  if (seg === "konto") return { page: "konto" };
   if (seg === "budget") return { page: "budget", id: id === "etapp2" ? "budget2" : "budget" };
   if (seg === "vaning") return { page: "vaning", id: id || "plan1" };
   if (seg === "omrade" && id) return { page: "omrade", id };
@@ -30,6 +34,8 @@ export default function App() {
     window.addEventListener("vs-config", onCfg);
     return () => window.removeEventListener("vs-config", onCfg);
   }, []);
+  const [recovery, setRecovery] = useState(isRecoveryLink());
+  if (recovery) return <RecoverPassword onDone={() => { setRecovery(false); setUnlockedState(isUnlocked()); }} />;
   if (!unlocked) return <Login onLoggedIn={() => setUnlockedState(true)} />;
   return <AppInner />;
 }
@@ -69,8 +75,10 @@ function AppInner() {
         <a className={"navlink" + (route.page === "vaning" ? " active" : "")} href="#/vaning/plan1">Våningar</a>
         <a className={"navlink" + (route.page === "projekt" ? " active" : "")} href="#/projekt">Projekt</a>
         <a className={"navlink" + (route.page === "budget" ? " active" : "")} href="#/budget">Budget</a>
+        <a className={"navlink" + (route.page === "utgifter" ? " active" : "")} href="#/utgifter">Utgifter</a>
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
           {!canEdit() && <span className="zonechip" title="Ditt konto har bara läsbehörighet">Skrivskyddad</span>}
+          <a className={"navlink" + (route.page === "konto" ? " active" : "")} href="#/konto" title="Byt lösenord">Konto</a>
           <button className="navlink" style={{ background: "none", border: "none", cursor: "pointer" }}
             title={"Inloggad som " + (currentUser()?.email || "")}
             onClick={() => { if (confirm("Logga ut " + (currentUser()?.email || "") + " på den här enheten?")) logout(); }}>Logga ut</button>
@@ -81,6 +89,8 @@ function AppInner() {
         {route.page === "vaning" && <Floors floorId={route.id} rooms={roomsApi.rooms} />}
         {route.page === "projekt" && <Project />}
         {route.page === "budget" && <Budget key={route.id} id={route.id} />}
+        {route.page === "utgifter" && <Expenses />}
+        {route.page === "konto" && <ChangePassword />}
         {route.page === "omrade" && <Zone zoneId={route.id} roomsApi={roomsApi} />}
         {route.page === "rum" && <Room roomId={route.id} roomsApi={roomsApi} />}
       </div>

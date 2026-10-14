@@ -158,6 +158,18 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   **jsPDF fonts = Windows-1252 only**: one char outside it (≈ → ✓ emoji) garbles the whole line, so `newDoc()` (pdf.js)
   patches text/splitTextToSize/getTextWidth to run `clean()` — always create docs via `newDoc()`.
 
+### Utgifter (2026-10-14)
+- `#/utgifter` (`src/pages/Expenses.jsx`, nav "Utgifter"): register invoices/receipts. Record **`space:expenses`** =
+  `{ items:[{ id, date, supplier, what, amount (INKL. moms, as on the invoice), vat? (blank = 20 % of amount), paidBy:
+  Pelle|Linus|Emma, status: Obetald|Betald, due, etapp: budget|budget2, phaseId, part (T/R/G/M), files:[{path,name,type,
+  size}], note }] }`. Files go to the **private `vs-docs`** bucket (`uploadDoc`, opened via signed URL). Summary: spenderat,
+  obetalt (förfallna red), per betalare, **utfall vs budget per fas and per byggdel** (budget from `computeBudget`, exkl.
+  moms). Same exkl./inkl. moms toggle as Budget (`vs:v1:ui:moms`). Linking = fas + byggdel only (owner: not per budget row).
+- **Konto** (`#/konto`, nav): "Byt lösenord" (PUT /auth/v1/user). Login has "Glömt lösenord?" → /auth/v1/recover with
+  redirect to the live site; the link lands as `#access_token…&type=recovery` → `RecoverPassword` sets a new password.
+  Auth `site_url`/`uri_allow_list` set to the live URL (2026-10-14). No custom SMTP → Supabase's default mailer may only
+  deliver to project team addresses; the reliable path is Byt lösenord while still logged in.
+
 ### Våningar & utrymmen (2026-10)
 - New concept **utrymme** = one entry in `vs:v1:rooms` that may cover several rooms. 12 utrymmen drawn from the
   bygglov rev 2026-06-16 (ids `u-k-*`, `u-p1-*`, `u-p2-*`, names prefixed "K ·", "P1 ·", "P2 ·"): K Nya/Gamla källaren;

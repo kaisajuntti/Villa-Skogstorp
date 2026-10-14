@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { login } from "../auth.js";
+import { login, requestPasswordReset } from "../auth.js";
 import { syncPull } from "../storage.js";
 
 function errorText(e) {
@@ -44,6 +44,12 @@ export default function Login({ onLoggedIn }) {
           {busy ? "Loggar in …" : "Logga in"}
         </button>
         {err && <p className="sub" style={{ color: "var(--red)", marginTop: 10 }}>{err}</p>}
+        <button type="button" className="btn small" style={{ marginTop: 14, border: "none", color: "var(--muted)" }}
+          onClick={async () => {
+            if (!email) { setErr("Skriv din e-post först, tryck sedan på Glömt lösenord."); return; }
+            try { await requestPasswordReset(email); setErr("Om kontot finns har en länk skickats till " + email + ". Öppna den på den här enheten."); }
+            catch (e2) { setErr("Kunde inte skicka länk: " + e2.message); }
+          }}>Glömt lösenord?</button>
       </form>
     </div>
   );

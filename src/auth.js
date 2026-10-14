@@ -92,3 +92,48 @@ export async function authHeaders() {
   const t = await getToken();
   return { apikey: SUPABASE.key, Authorization: "Bearer " + (t || SUPABASE.key) };
 }
+
+// ---- password: change while logged in, or reset via e-mail link ----
+const SITE = "https://kaisajuntti.github.io/Villa-Skogstorp/";
+
+export async function setPassword(password) {
+  const t = await getToken();
+  if (!t) throw new Error("Inte inloggad");
+  const r = await fetch(`${base}/user`, {
+    method: "PUT",
+    headers: { apikey: SUPABASE.key, Authorization: "Bearer " + t, "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.msg || j.error_description || j.message || "HTTP " + r.status);
+}
+
+// Sends a reset link to the e-mail (if the account exists). The link opens the site with
+// #access_token=…&type=recovery, which consumeRecoveryHash() picks up.
+export async function requestPasswordReset(email) {
+  const r = await fetch(`${base}/recover?redirect_to=${encodeURIComponent(SITE)}`, {
+    method: "POST",
+    headers: { apikey: SUPABASE.key, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim() }),
+  });
+  if (!r.ok && r.status !== 429) { const j = await r.json().catch(() => ({})); throw new Error(j.msg || j.message || "HTTP " + r.status); }
+  if (r.status === 429) throw new Error("För många försök – vänta en stund.");
+}
+
+export const isRecoveryLink = () => /type=recovery/.test(window.location.hash);
+
+// Turn the recovery link's tokens into a normal session (then the user picks a new password).
+export async function consumeRecoveryHash() {
+  const p = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const access_token = p.get("access_token"), refresh_token = p.get("refresh_token");
+  if (!access_token || !refresh_token) throw new Error("Länken är ogiltig eller har gått ut.");
+  const r = await fetch(`${base}/user`, { headers: { apikey: SUPABASE.key, Authorization: "Bearer " + access_token } });
+  const u = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error("Länken är ogiltig eller har gått ut.");
+  saveSession({
+    access_token, refresh_token,
+    expires_at: Number(p.get("expires_at")) || Math.floor(Date.now() / 1000) + (Number(p.get("expires_in")) || 3600),
+    user: { id: u.id, email: u.email, app_metadata: u.app_metadata || {} },
+  });
+  history.replaceState(null, "", window.location.pathname + "#/");
+}

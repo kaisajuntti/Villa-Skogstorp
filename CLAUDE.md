@@ -356,6 +356,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - Ansvariga: **Pelle** = snickare/totalentreprenör (default). **Linus** = fönster och dörrar, **målare** (eget yrke
   Målare 580 kr/h, 2 pers) och **platsbyggt** (garderober/hyllor).
 - Fönster/dörrar från **Snickarglädje** (snickargladje.com, prislistor exkl. moms) – **25 % rabatt**.
+  **Offert Snickarglädje (2026-10-14): tillbyggnadens 22 fönster (inkl. välvt källarfönster + glasparti) + källardörr = 500 000
+  inkl. moms (400 000 exkl.)** – i budget som en post. Befintligt hus: **11 fönster** (inte 20), uppskattat ~17 000 kr/st exkl.
+  efter den offerten tills egen offert finns.
 - **Ventilation (beslutat 2026-10)**: frånluft (F) i stället för FTX. Tillbyggnaden: frånluftsmodul (NIBE FLM) mot
   bergvärmen i **teknikrum = förrådet i tillbyggnadens källare** (bekräftat; INSTALL i befintlig källare är dagens plats för installationerna – dålig plats, ska inte användas), schakt **S1** intill tvättnedkastet (WC/D plan 2 + tvätt/städ plan 1 → källarens
   undertak), dusch + bastu direkt. Befintligt: vindsfläkt för master bath + WC entré; köket = **takfläkt över ön** med

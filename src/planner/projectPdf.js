@@ -15,7 +15,10 @@ const M = 14;
 const INK = [51, 49, 46], BLUE = [90, 122, 140], MUTED = [122, 117, 110], LINE = [214, 208, 198], SOFT = [246, 243, 237], TXT = [70, 66, 62], RED = [154, 74, 58], OKL = [251, 243, 228];
 const TYP_COLORS = ["#5A7A8C", "#8C6A3F", "#5E8C5A", "#9a4a3a", "#7A5A8C", "#3F7F8C", "#8C8C3F"].map((h) => { const c = hexToRgb(h); return [c.r, c.g, c.b]; });
 const nf = (n, d = 0) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: d }).format(n);
-const kr = (n) => nf(Math.round(n)) + " kr";
+// VAT = display factor for the budget section (1 exkl. moms, 1.25 inkl.), set per build from pdf.budget.moms.
+let VAT = 1;
+const kr = (n) => nf(Math.round(n * VAT)) + " kr";
+const momsTxt = () => (VAT > 1 ? "inkl. moms" : "exkl. moms");
 const hF = (h) => nf(Math.round(h)) + " h";
 const short = (n) => String(n || "").replace(/^(K|P1|P2)\s*·\s*/, "");
 const today = () => new Date().toLocaleDateString("sv-SE");
@@ -403,8 +406,8 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
     if (ganttOn) { W.y -= 4; gantt(W, B, "Tidplan – " + etTitle, true); W.newPage("p"); }
   } else if (ganttOn) { W.newPage("l"); gantt(W, B, "Tidplan – " + etTitle, true); W.newPage("p"); }
   else W.newPage("p");
-  W.h2(etTitle, prices ? kr(B.total) + " ex moms" : hF(B.hours));
-  if (prices) W.note("Alla belopp exklusive moms. Byggmaterial räknat på inköpspris; el-, VVS-material och plåt via respektive hantverkare.");
+  W.h2(etTitle, prices ? kr(B.total) + " " + momsTxt() : hF(B.hours));
+  if (prices) W.note((VAT > 1 ? "Alla belopp inklusive moms (25 %)." : "Alla belopp exklusive moms.") + " Byggmaterial räknat på inköpspris; el-, VVS-material och plåt via respektive hantverkare.");
 
   // Faser & tidsplan – same list as on the Budget page
   W.h3("Faser & tidsplan");
@@ -419,7 +422,7 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
 
   if (views.includes("summary")) {
     W.h3("Sammanfattning");
-    const fig = prices ? [["Total (ex moms)", kr(B.total)], ["Material", kr(B.byCat.Material)], ["Extern (UE/tjänster)", kr(B.byCat.Extern)], ["Arbete (egna hantverkare)", kr(B.byCat.Arbete)]] : [];
+    const fig = prices ? [["Total (" + momsTxt() + ")", kr(B.total)], ["Material", kr(B.byCat.Material)], ["Extern (UE/tjänster)", kr(B.byCat.Extern)], ["Arbete (egna hantverkare)", kr(B.byCat.Arbete)]] : [];
     if (prices && B.oklart) fig.push(["varav oklart", kr(B.oklart), RED]);
     fig.push(["Arbetstimmar", hF(B.hours)]);
     const ds = B.dated.map((p) => p.start).sort(), de = B.dated.map((p) => p.end).sort();
@@ -428,7 +431,7 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
     // Byggdel × Pelle/Linus
     const parts = [...PARTS, ["", "Ej angiven byggdel"]].filter(([k]) => B.split[k]);
     if (prices && parts.length) {
-      const k0 = (n) => (n ? nf(Math.round(n / 1000)) : "–");
+      const k0 = (n) => (n ? nf(Math.round((n * VAT) / 1000)) : "–");
       const sum = (o) => (o ? o.Material + o.Extern + o.Arbete : 0);
       const add = (a, b) => ({ Material: (a?.Material || 0) + (b?.Material || 0), Extern: (a?.Extern || 0) + (b?.Extern || 0), Arbete: (a?.Arbete || 0) + (b?.Arbete || 0) });
       const cell = (o) => (sum(o) ? k0(sum(o)) + "\nM " + k0(o.Material) + " · A " + k0(o.Arbete) + (o.Extern ? " · E " + k0(o.Extern) : "") : "–");
@@ -518,6 +521,7 @@ function renderBudgetEtapp(W, b, etapp, opt, first, n, title) {
 
 function renderBudget(W, P, n, title, budgets) {
   const opt = P.pdf.budget || {};
+  VAT = opt.moms ? 1.25 : 1;
   const etapper = (opt.etapper || ["budget"]).filter((e) => budgets[e]?.items?.length);
   if (!etapper.length) return false;
   etapper.forEach((e, i) => renderBudgetEtapp(W, budgets[e], e, opt, i === 0, n, title));

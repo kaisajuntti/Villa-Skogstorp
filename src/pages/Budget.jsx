@@ -21,7 +21,9 @@ const OVERGRIP = "Övergripande";
 const NODEL = "Ej angiven del";
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n)) + " kr";
+// Display factor: 1 = exkl. moms, 1.25 = inkl. moms (toggle at the top, per device). Stored values are always exkl. moms.
+let VAT = 1;
+const kr = (n) => new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n * VAT)) + " kr";
 const hFmt = (h) => (Math.round(h) + " h");
 const TYP_COLORS = ["#5A7A8C", "#8C6A3F", "#5E8C5A", "#9a4a3a", "#7A5A8C", "#3F7F8C", "#8C8C3F"];
 
@@ -86,7 +88,7 @@ function SplitTable({ split }) {
   const sum = (o) => (o ? o.Material + o.Extern + o.Arbete : 0);
   const tot = {}; for (const w of WHO) tot[w] = { ...z };
   for (const [k] of parts) for (const w of WHO) for (const c of Object.keys(z)) tot[w][c] += split[k]?.[w]?.[c] || 0;
-  const k0 = (n) => (n ? new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round(n / 1000)) : "–");
+  const k0 = (n) => (n ? new Intl.NumberFormat("sv-SE", { maximumFractionDigits: 0 }).format(Math.round((n * VAT) / 1000)) : "–");
   const Cell = ({ o, strong }) => (
     <td style={{ ...td("right"), fontFamily: "var(--mono)", whiteSpace: "nowrap", borderLeft: "1px solid var(--line)", fontWeight: strong ? 700 : 400 }}>
       <div>{k0(sum(o))}</div>
@@ -133,6 +135,9 @@ export default function Budget({ id = "budget" }) {
   const { rooms } = useRooms();
   const [groupBy, setGroupBy] = useState("phase");
   const [openMat, setOpenMat] = useState({}); // item id → material lines expanded
+  const [moms, setMoms] = useState(() => { try { return localStorage.getItem("vs:v1:ui:moms") === "1"; } catch { return false; } });
+  const setMomsPersist = (v) => { setMoms(v); try { localStorage.setItem("vs:v1:ui:moms", v ? "1" : "0"); } catch { /* ignore */ } };
+  VAT = moms ? 1.25 : 1;
 
   const phases = useMemo(
     () => (space && space.phases && space.phases.length
@@ -433,13 +438,21 @@ export default function Budget({ id = "budget" }) {
 
   return (
     <div className="page wide">
-      <h1>BUDGET &amp; TIDSPLAN</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <h1>BUDGET &amp; TIDSPLAN</h1>
+        <div className="row" style={{ gap: 0 }} title="Visar alla belopp inkl. eller exkl. moms. Det du skriver in (á-pris, extern) är alltid exkl. moms.">
+          {[[false, "Exkl. moms"], [true, "Inkl. moms"]].map(([v, l], i) => (
+            <button key={l} className={"btn small" + (moms === v ? " primary" : "")} onClick={() => setMomsPersist(v)}
+              style={i === 0 ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 } : { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, marginLeft: -1 }}>{l}</button>
+          ))}
+        </div>
+      </div>
       <div className="row" style={{ gap: 8, marginBottom: 10 }}>
         {ETAPPER.map((e) => (
           <a key={e.id} href={e.href} className={"btn small" + (e.id === id ? " primary" : "")}>{e.label}</a>
         ))}
       </div>
-      <p className="sub">Varje post = Material (det ni köper: mängd × á-pris, eller á-pris som klumpsumma) + Extern (UE/tjänst – någon annan gör det till fast pris) + Arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Alla priser ex moms.</p>
+      <p className="sub">Varje post = Material (det ni köper: mängd × á-pris, eller á-pris som klumpsumma) + Extern (UE/tjänst – någon annan gör det till fast pris) + Arbete (ett eller flera yrken × timmar × timpris). Ansvarig = vem som ansvarar (oftast Pelle). Markera "Oklart" om det är osäkert om posten behövs. Datum för materialleverans (extern leverans, t.ex. fönster) visas i tidslinjen. Belopp visas {moms ? <b>inkl. moms (×1,25)</b> : "exkl. moms"} – á-pris och belopp du skriver in är alltid exkl. moms.</p>
 
       {/* summary */}
       <div className="card" style={{ marginBottom: 18 }}>

@@ -344,6 +344,9 @@ export function BudgetOptions({ opts, sum }) {
       <label style={{ fontSize: 13, display: "block", marginTop: 8 }}>
         <input type="checkbox" disabled={ro} checked={s.prices !== false} onChange={(e) => opts.setSec("budget", { prices: e.target.checked })} /> Visa belopp (avbocka för en version utan priser, t.ex. till hantverkare)
       </label>
+      <label style={{ fontSize: 13, display: "block", marginTop: 6 }}>
+        <input type="checkbox" disabled={ro || s.prices === false} checked={!!s.moms} onChange={(e) => opts.setSec("budget", { moms: e.target.checked })} /> Belopp inkl. moms (annars exkl. moms)
+      </label>
     </div>
   );
 }

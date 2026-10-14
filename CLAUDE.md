@@ -323,7 +323,10 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   PDF summary ("Fördelning – byggdel × ansvarig"). **Linus** = måleri, snickerier (platsbyggt, invändiga foder/bänkar/
   sockel), fönster/dörrar, kök, vitvaror, kamin, badrumsinredning + material lines granitkeramik/kakel/trägolv/heltäckning.
   Seeded by Claude as a first proposal (owner adjusts per row). **Tapet is not in the budget yet.**
-- Deferred (non-breaking): moms/ROT layer, budget in PDF export, per-room budget on room page.
+- **Moms-växel (2026-10-14)**: "Exkl. moms / Inkl. moms" at the top of Budget (per device, `vs:v1:ui:moms`) multiplies every
+  displayed amount by 1,25 (module-level `VAT` used by `kr`/`k0`); stored values and inputs are always exkl. moms. PDF option
+  `pdf.budget.moms` ("Belopp inkl. moms" in Projekt → Arbetsplan & budget).
+- Deferred (non-breaking): ROT layer, budget in PDF export, per-room budget on room page.
 - **TODO (önskat 2026-10):** "Material totalt"-vyn ska sorteras kronologiskt och grupperas/markeras per fas
   (i dag aggregerad per benämning + enhet, sorterad på kr).
 

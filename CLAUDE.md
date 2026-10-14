@@ -347,6 +347,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - **Offertpriser jämförs rakt – lägg INTE på 7 % på en offert** (owner 2026-10-14). Beijer-offert 261006 (Olle Svenssons
   Bygg): Finja Exakt 350 = 1 238 kr/m² vägg inkl. murbruk, armering, murlåda, frakt (budget 800); gips 12,5 = 31 kr/m²;
   K-ply 12 = 95 kr/m²; regel 45×45 = 9,45 kr/lpm.
+  Budget updated 2026-10-14 (+65 tkr): Exakt 1 238 kr/m² (källarväggar + bärande vägg), U-block + bistål 400 kr/lm, garage-
+  platta 450 kr/m², new row "Frakt tunga leveranser" 10 tkr. **Exakt only where it's warm inside (källarväggar, bärande vägg mot
+  befintligt/krypgrund)** – stödmurar (terrass, nedgång) = vanlig betonghålsten fylld med betong (1 200 kr/lm kvar), garage = kantelement.
 - **Inga småposter** i budgeten (slang, spridare, verktyg o.d.) – bara poster som spelar roll.
 - **Utanför budgeten** (sköts vid sidan av): kontrollansvarig (KA), kommunens avgifter (bygglov/startbesked/slutbesked),
   lampor/armaturer. Ingen byggetablering (befintliga huset används).

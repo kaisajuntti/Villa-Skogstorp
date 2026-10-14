@@ -344,6 +344,9 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
 - **Prisbas: byggmaterial = Beijer inköp (specialpris) + 7 %, allt exkl. moms.** Plåt, el-, VVS-material och
   bergvärmepump köps **via respektive hantverkare** (deras grossistpris) – inte via Beijer. Snickare 580 kr/h (rör ej). **Materialstandard: alltid BRA grejer**
   (beställarens princip) – men räknat på Beijer-inköp. **Plattor/granitkeramik köps mycket billigt** (~200 kr/m² för plattan).
+- **Offertpriser jämförs rakt – lägg INTE på 7 % på en offert** (owner 2026-10-14). Beijer-offert 261006 (Olle Svenssons
+  Bygg): Finja Exakt 350 = 1 238 kr/m² vägg inkl. murbruk, armering, murlåda, frakt (budget 800); gips 12,5 = 31 kr/m²;
+  K-ply 12 = 95 kr/m²; regel 45×45 = 9,45 kr/lpm.
 - **Inga småposter** i budgeten (slang, spridare, verktyg o.d.) – bara poster som spelar roll.
 - **Utanför budgeten** (sköts vid sidan av): kontrollansvarig (KA), kommunens avgifter (bygglov/startbesked/slutbesked),
   lampor/armaturer. Ingen byggetablering (befintliga huset används).

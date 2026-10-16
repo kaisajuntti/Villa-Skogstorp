@@ -34,6 +34,16 @@ function useFloorImage(id) {
   return img;
 }
 
+function RoomLink({ r, hover }) {
+  return (
+    <a className="roomlink" href={"#/rum/" + r.id}
+      onPointerEnter={hover ? () => hover(r.id) : undefined} onPointerLeave={hover ? () => hover(null) : undefined}>
+      <span>{short(r.name)} <span className="zonechip" style={{ marginLeft: 8 }}>{r.zone === "tillbyggnad" ? "Tillbyggnad" : "Befintligt"}</span></span>
+      <span className="meta">öppna →</span>
+    </a>
+  );
+}
+
 export default function Floors({ floorId, rooms }) {
   const [space] = useSpace("floors");
   const floors = space?.floors || [];
@@ -87,19 +97,29 @@ export default function Floors({ floorId, rooms }) {
         </svg>
       </div>
 
-      <h2>Utrymmen – {floor.title}</h2>
-      <div className="cardlist">
-        {areas.map((a) => {
-          const r = roomById[a.roomId];
-          return (
-            <a key={a.roomId} className="roomlink" href={"#/rum/" + a.roomId}
-               onPointerEnter={() => setHover(a.roomId)} onPointerLeave={() => setHover(null)}>
-              <span>{short(r.name)} <span className="zonechip" style={{ marginLeft: 8 }}>{r.zone === "tillbyggnad" ? "Tillbyggnad" : "Befintligt"}</span></span>
-              <span className="meta">öppna →</span>
-            </a>
-          );
-        })}
-      </div>
+      {/* All utrymmen, grouped per floor (the shown floor first), + those not drawn on any floor */}
+      {[floor, ...floors.filter((x) => x.id !== floor.id)].map((fl) => {
+        const list = fl.areas.map((a) => roomById[a.roomId]).filter(Boolean);
+        if (!list.length) return null;
+        const cur = fl.id === floor.id;
+        return (
+          <div key={fl.id}>
+            <h2>Utrymmen – {fl.title}{!cur && <a href={"#/vaning/" + fl.id} style={{ fontSize: 12, marginLeft: 10, textTransform: "none", letterSpacing: 0, fontWeight: 400 }}>visa våningen →</a>}</h2>
+            <div className="cardlist">{list.map((r) => <RoomLink key={r.id} r={r} hover={cur ? setHover : null} />)}</div>
+          </div>
+        );
+      })}
+      {(() => {
+        const placed = new Set(floors.flatMap((x) => x.areas.map((a) => a.roomId)));
+        const loose = (rooms || []).filter((r) => !placed.has(r.id));
+        return loose.length ? (
+          <div>
+            <h2>Övriga utrymmen</h2>
+            <p className="sub" style={{ marginTop: -4 }}>Finns i listan men är inte inritade på våningsplanen (t.ex. kopior/varianter).</p>
+            <div className="cardlist">{loose.map((r) => <RoomLink key={r.id} r={r} />)}</div>
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 }

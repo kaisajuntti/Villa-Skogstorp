@@ -51,7 +51,7 @@ export default function Room({ roomId, roomsApi }) {
 
   return (
     <>
-      <div style={{ padding: "10px 18px 0" }}>
+      <div className="room-crumb" style={{ padding: "10px 18px 0" }}>
         <div className="crumb">
           <a href="#/">Översikt</a> / <a href={"#/omrade/" + room.zone}>{zone?.name}</a> / {room.name}
         </div>

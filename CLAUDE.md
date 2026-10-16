@@ -473,6 +473,10 @@ Invariants:
   färgschema) then **every room's full 3-page layout stacked** ("stor bibba"). `sectionFor`
   (Spaces.jsx) returns the full per-room data used by both. `addRoom`/`addColors` are the
   older simpler helpers (`addRoom` now unused).
+- **Phone layout (2026-10-16)**: ≤640 px the nav, room tabs and every planner toolbar become ONE horizontally scrollable
+  row (`.nav`, `.tabs`, `.pl-bar` in index.css), hints/subtitle/breadcrumb are hidden (`.pl-hint`, `.pl-sub`, `.room-crumb`),
+  header buttons go icon-only (`.pl-lbl` hidden) → the canvas gets ~2/3 of an iPhone screen. New planner toolbars must use
+  `className="pl-bar"` and hint spans `className="pl-hint"`.
 - **Free pan**: dragging empty canvas pans the view at any zoom (not just when zoomed
   in) so a selected object can be slid out from behind the selection toolbar; ⤢ resets.
 - Pinch-zoom 1×–8× with capture-phase pointer tracking; letterbox-aware coordinate

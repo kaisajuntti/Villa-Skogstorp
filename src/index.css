@@ -97,3 +97,23 @@ textarea { min-height: 140px; resize: vertical; line-height: 1.5; }
   .page { padding: 14px 12px 50px; }
   .nav { gap: 12px; padding: 12px 12px 8px; }
 }
+
+/* ---- phones: one-line scrollable bars so the plan gets the height ---- */
+@media (max-width: 640px) {
+  .nav { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 14px; padding: 10px 12px 8px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .nav::-webkit-scrollbar, .tabs::-webkit-scrollbar, .pl-bar::-webkit-scrollbar { display: none; }
+  .nav .brand { font-size: 14px; letter-spacing: 1px; }
+  .nav a.navlink, .nav button.navlink { font-size: 12px; }
+  .room-crumb { display: none; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px 4px; gap: 6px; scrollbar-width: none; }
+  .tabs .btn { padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
+  .pl-head { padding: 6px 12px 2px !important; align-items: center !important; }
+  .pl-title { font-size: 12.5px !important; letter-spacing: 1px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pl-sub, .pl-hint, .pl-lbl { display: none !important; }
+  .pl-acts { gap: 6px !important; }
+  .pl-acts button { padding: 6px 10px !important; font-size: 14px !important; }
+  .pl-bar { flex-wrap: nowrap !important; overflow-x: auto !important; padding: 4px 12px !important; gap: 6px !important; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .pl-bar > * { flex-shrink: 0; }
+  .pl-bar button { padding: 6px 9px !important; font-size: 12px !important; white-space: nowrap; }
+  .pl-bar input[type="number"] { width: 64px !important; }
+}

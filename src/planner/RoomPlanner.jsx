@@ -1020,26 +1020,26 @@ export default function RoomPlanner({ storageKey, title }) {
   return (
     <div style={rootStyle} onPointerDownCapture={markEdited} onKeyDownCapture={markEdited} onChangeCapture={markEdited}>
       <input ref={cmPhotoRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPickCommentPhoto} />
-      <div style={{ padding: "10px 16px 6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <div>
-          <div style={{ fontSize: 15, letterSpacing: 2, fontWeight: 600 }}>{title || "RUMSPLANERARE"}</div>
-          <div style={{ fontSize: 12, color: "#7A756E" }}>
+      <div className="pl-head" style={{ padding: "10px 16px 6px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="pl-title" style={{ fontSize: 15, letterSpacing: 2, fontWeight: 600 }}>{title || "RUMSPLANERARE"}</div>
+          <div className="pl-sub" style={{ fontSize: 12, color: "#7A756E" }}>
             {readOnly ? "Skrivskyddad vy" : full ? "Helskärm — dra för att flytta · Stäng för verktyg" : "1 Rum → 2 Öppningar → 3 Inredning"}{status ? " · " + status : ""}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div className="pl-acts" style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           {!readOnly && (
-            <button style={{ ...btn, whiteSpace: "nowrap", opacity: undoN ? 1 : 0.4 }} disabled={!undoN} onClick={undo}>↶ Ångra</button>
+            <button style={{ ...btn, whiteSpace: "nowrap", opacity: undoN ? 1 : 0.4 }} disabled={!undoN} onClick={undo} title="Ångra">↶<span className="pl-lbl"> Ångra</span></button>
           )}
-          <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={printPlan}>⬇ PDF</button>
+          <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={printPlan} title="PDF">⬇<span className="pl-lbl"> PDF</span></button>
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={() => setFull((f) => !f)}>
-            {full ? "✕ Stäng" : "⤢ Helskärm"}
+            {full ? "✕" : "⤢"}<span className="pl-lbl">{full ? " Stäng" : " Helskärm"}</span>
           </button>
         </div>
       </div>
 
       {!readOnly && !full && (
-      <div style={{ display: "flex", gap: 8, padding: "6px 16px", flexWrap: "wrap" }}>
+      <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "6px 16px", flexWrap: "wrap" }}>
         {modeBtn("rum", "1 · Rum")}
         {modeBtn("oppningar", "2 · Öppningar")}
         {modeBtn("inredning", "3 · Inredning")}
@@ -1051,7 +1051,7 @@ export default function RoomPlanner({ storageKey, title }) {
       )}
 
       {!readOnly && !full && mode === "rum" && (
-        <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 16px", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 16px", flexWrap: "wrap" }}>
           <label style={{ fontSize: 13 }}>Bredd&nbsp;
             <input type="number" inputMode="numeric" value={wStr} step={50}
               onChange={(e) => setWStr(e.target.value)}
@@ -1066,7 +1066,7 @@ export default function RoomPlanner({ storageKey, title }) {
               onKeyDown={(e) => { if (e.key === "Enter") { commitDim("l", lStr); e.currentTarget.blur(); } }}
               style={{ width: 90, fontFamily: mono, fontSize: 14, padding: 6, border: `1.5px solid ${ink}`, borderRadius: 8 }} /> mm
           </label>
-          <span style={{ fontSize: 12, color: "#7A756E" }}>= {((room.w * room.l) / 1e6).toFixed(1)} m²</span>
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>= {((room.w * room.l) / 1e6).toFixed(1)} m²</span>
           <label style={{ fontSize: 13 }}>
             <input type="checkbox" checked={room.frame !== false}
               onChange={(e) => { pushUndo(); setRoom((r) => ({ ...r, frame: e.target.checked ? undefined : false })); }} /> Rumsväggar (rektangel)
@@ -1075,25 +1075,25 @@ export default function RoomPlanner({ storageKey, title }) {
       )}
 
       {!readOnly && !full && mode === "oppningar" && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
           {Object.entries(OPEN_DEFS).map(([k, d]) => (
             <button key={k} style={tool === k ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setTool(k)}>{d.label}</button>
           ))}
-          <span style={{ fontSize: 12, color: "#7A756E" }}>Tryck på en vägg (rummets eller en ritad) för att skära in · dra för att flytta</span>
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>Tryck på en vägg (rummets eller en ritad) för att skära in · dra för att flytta</span>
         </div>
       )}
 
       {!readOnly && !full && mode === "mat" && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
           <button style={saveMeas ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setSaveMeas((s) => !s)}>{saveMeas ? "✓ Spara mått" : "Spara mått"}</button>
           <button style={btn} onClick={() => { setMeasures([]); setMStart(null); setMPreview(null); }}>Rensa tillfälliga</button>
           <button style={snapOn ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setSnapOn((s) => !s)}>{snapOn ? "✓ Fäst mot objekt" : "Fäst mot objekt"}</button>
-          <span style={{ fontSize: 12, color: "#7A756E" }}>{saveMeas ? "Sparade mått blir kvar på ritningen — dra måttlinjen i sidled för att lägga den bredvid bilden." : "Tryck/dra mellan två punkter · nära vågrätt/lodrätt låses · slå på “Spara mått” för bestående mått"}</span>
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>{saveMeas ? "Sparade mått blir kvar på ritningen — dra måttlinjen i sidled för att lägga den bredvid bilden." : "Tryck/dra mellan två punkter · nära vågrätt/lodrätt låses · slå på “Spara mått” för bestående mått"}</span>
         </div>
       )}
 
       {!readOnly && !full && mode === "vaggar" && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
           <button style={wallW === WALL_OUTER ? { ...btnOn, background: blue, borderColor: blue } : btn}
             onClick={() => setThick(WALL_OUTER)}>Yttervägg {WALL_OUTER}</button>
           <button style={wallW === WALL_INNER ? { ...btnOn, background: blue, borderColor: blue } : btn}
@@ -1114,7 +1114,7 @@ export default function RoomPlanner({ storageKey, title }) {
           {drawingWall && activeWall && <button style={btn} onClick={undoWallPoint}>Ångra punkt</button>}
           {activeWall && !drawingWall && <button style={{ ...btn, color: red, borderColor: red }} onClick={removeActiveWall}>Ta bort vägg</button>}
           <button style={snapOn ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setSnapOn((s) => !s)}>{snapOn ? "✓ Fäst mot objekt" : "Fäst mot objekt"}</button>
-          <span style={{ fontSize: 12, color: "#7A756E" }}>
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
             {drawingWall ? "Tryck för att sätta hörn · ✓ Klar när väggen är färdig"
               : selWallInfo ? selWallInfo
               : "Tryck på en vägg för att markera den · dra väggen för att flytta · dra i hörnen för att justera"}
@@ -1123,12 +1123,12 @@ export default function RoomPlanner({ storageKey, title }) {
       )}
 
       {!readOnly && !full && mode === "kommentar" && (
-        <div style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
           <button style={cmType === "comment" ? { ...btnOn, background: blue, borderColor: blue } : btn}
             onClick={() => setCmType("comment")}>💬 Kommentar</button>
           <button style={cmType === "photo" ? { ...btnOn, background: blue, borderColor: blue } : btn}
             onClick={() => setCmType("photo")}>📷 Bild</button>
-          <span style={{ fontSize: 12, color: "#7A756E" }}>
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
             Tryck på planen där {cmType === "photo" ? "bilden" : "kommentaren"} ska sitta.{" "}
             {cmType === "photo" ? "Välj en bild." : "Skriv texten."} Klicka på markören (● / ▾) för att visa innehållet.
           </span>
@@ -1136,7 +1136,7 @@ export default function RoomPlanner({ storageKey, title }) {
       )}
 
       {!readOnly && !full && mode === "inredning" && (
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "8px 16px", WebkitOverflowScrolling: "touch" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 8, overflowX: "auto", padding: "8px 16px", WebkitOverflowScrolling: "touch" }}>
           {PALETTE.map((p, i) => (
             <button key={i} style={btn} onClick={() => addItem(p)}>
               + {p.t} <span style={{ fontFamily: mono, fontSize: 11, color: blue }}>{p.w}</span>
@@ -1146,18 +1146,18 @@ export default function RoomPlanner({ storageKey, title }) {
       )}
 
       {!readOnly && !full && mode === "inredning" && (
-        <div style={{ display: "flex", gap: 8, padding: "0 16px 8px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "0 16px 8px", alignItems: "center", flexWrap: "wrap" }}>
           <button style={drawRect ? { ...btnOn, background: blue, borderColor: blue } : btn}
             onClick={() => { setDrawRect((d) => !d); setMultiMode(false); }}>
             {drawRect ? "✓ Ritar ruta" : "✏️ Rita ruta"}
           </button>
-          {drawRect && <span style={{ fontSize: 12, color: "#7A756E" }}>Dra på ytan för att rita en egen ruta</span>}
+          {drawRect && <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>Dra på ytan för att rita en egen ruta</span>}
           <button style={multiMode ? { ...btnOn, background: blue, borderColor: blue } : btn}
             onClick={() => { setMultiMode((m) => !m); setDrawRect(false); setGroup([]); }}>
             {multiMode ? "✓ Markerar flera" : "Markera flera"}
           </button>
           {multiMode && (
-            <span style={{ fontSize: 12, color: "#7A756E" }}>
+            <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
               Tryck på objekt för att markera · dra för att flytta ihop{group.length ? ` · ${group.length} valda` : ""}
             </span>
           )}
@@ -1171,7 +1171,7 @@ export default function RoomPlanner({ storageKey, title }) {
       )}
 
       {!readOnly && !full && mode === "bakgrund" && (
-        <div style={{ display: "flex", gap: 10, padding: "4px 16px 8px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="pl-bar" style={{ display: "flex", gap: 10, padding: "4px 16px 8px", alignItems: "center", flexWrap: "wrap" }}>
           <input ref={bgFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onPickBg} />
           <button style={btn} onClick={() => bgFileRef.current?.click()}>{bgImg ? "Byt bild" : "Ladda upp bild"}</button>
           {bgImg && bgT && (
@@ -1190,12 +1190,12 @@ export default function RoomPlanner({ storageKey, title }) {
               <button style={calib ? { ...btnOn, background: blue, borderColor: blue } : btn}
                 onClick={() => setCalib(calib ? null : { pts: [] })}>{calib ? "Avbryt kalibrering" : "Kalibrera skala"}</button>
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeBg}>Ta bort bild</button>
-              <span style={{ fontSize: 12, color: "#7A756E" }}>
+              <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
                 {calib ? "Tryck på två punkter med känt avstånd, ange sedan måttet i mm" : "Dra bilden för att flytta"}
               </span>
             </>
           )}
-          {!bgImg && <span style={{ fontSize: 12, color: "#7A756E" }}>Ladda upp en ritning/foto att rita ovanpå.</span>}
+          {!bgImg && <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>Ladda upp en ritning/foto att rita ovanpå.</span>}
         </div>
       )}
 

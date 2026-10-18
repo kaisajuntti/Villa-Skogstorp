@@ -495,8 +495,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   fönsterventiler + uteluftsdon. Kamin (Contura) uteluft i egen kanal om modellen tillåter. Vinkällaren ingår inte
   (`novent`). Ingen murstock/fundament i källaren – prefab lättskorsten. Förutsättningar = beslut med area "Ventilation"
   (vdec1–7), frågor = todos V1–V7. Underlag: bildspelet (privat bilaga i vs-docs, ej i PDF:en) + tre äldre skisser (arkiv);
-  de låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 (finns kvar i git-historiken tills den rensas
-  – kräver force-push, ägarens beslut).
+  de låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 (finns kvar i git-historiken – ägaren
+  har beslutat 2026-10-18 att den får ligga kvar, ingen rensning).
 - **Bergvärmepump: inverterstyrd, 0–16 kW** (rättat 2026-10-04 från ~12 kW; budget 115 000 kr inkl. VVB). Borrdjup 200 m i
   budgeten – med 16 kW och ~300 m² kan det behövas 250–300 m (låt borrfirman räkna; står i att göra-listan).
 - **El (beslutat 2026-10)**: elcentral i **städ plan 1** (tillbyggnaden), kablar ner till teknikrummet via S1 (ingen

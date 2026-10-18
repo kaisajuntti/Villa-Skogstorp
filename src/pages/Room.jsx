@@ -5,6 +5,7 @@ import { zoneById } from "../data/zones.js";
 import { ColorScheme, DocList, Notes, PlanCollection, InventoryList, InspoGallery, InspoLightbox } from "../components/Spaces.jsx";
 import VersionHistory from "../components/VersionHistory.jsx";
 import RoomPlanner from "../planner/RoomPlanner.jsx";
+import { PLAN_FLOOR, parseAreaRoomId, useFloorPlan, areaNames } from "../floorRooms.js";
 
 const TABS = [
   ["plan", "Planritning"],
@@ -33,6 +34,7 @@ function InspoPanel({ items, narrow }) {
   );
 }
 const INSPO_KEY = "vs:v1:ui:inspoPanel";
+const OWN_KEY = "vs:v1:ui:ownPlan"; // per device: utrymmen showing their own (archived) drawing instead of the floor crop
 
 export default function Room({ roomId, roomsApi }) {
   const { rooms } = roomsApi;
@@ -43,17 +45,35 @@ export default function Room({ roomId, roomsApi }) {
   useEffect(() => { const f = () => setNarrow(window.innerWidth < 760); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, []);
   const toggleInspo = () => setShowInspo((v) => { try { localStorage.setItem(INSPO_KEY, v ? "0" : "1"); } catch { /* ignore */ } return !v; });
   const inspo = space?.inspo || [];
+  // A room on a whole-floor plan ("<planId>:<areaId>") or an utrymme grouping some of them ({ plan, areas })
+  const virt = parseAreaRoomId(roomId);
+  const listed = (rooms || []).find((r) => r.id === roomId);
+  const floorPlanId = virt?.planId || listed?.plan || null;
+  const floorPlan = useFloorPlan(floorPlanId);
+  const [own, setOwn] = useState(() => { try { return (JSON.parse(localStorage.getItem(OWN_KEY)) || []).includes(roomId); } catch { return false; } });
+  const toggleOwn = () => setOwn((v) => {
+    try { const l = (JSON.parse(localStorage.getItem(OWN_KEY)) || []).filter((x) => x !== roomId); localStorage.setItem(OWN_KEY, JSON.stringify(v ? l : [...l, roomId])); } catch { /* ignore */ }
+    return !v;
+  });
 
-  if (rooms === null) return <div className="page"><p className="sub">Laddar …</p></div>;
-  const room = rooms.find((r) => r.id === roomId);
+  if (rooms === null || (virt && floorPlan === null)) return <div className="page"><p className="sub">Laddar …</p></div>;
+  let room = listed;
+  if (virt) {
+    const ar = (floorPlan.areas || []).find((a) => a.id === virt.areaId);
+    if (ar) room = { id: roomId, name: (PLAN_FLOOR[virt.planId]?.short || "") + " · " + areaNames(floorPlan.areas)[ar.id], plan: virt.planId, areas: [ar.id], virtual: true };
+  }
   if (!room) return <div className="page"><p>Rummet finns inte. <a href="#/">Till översikten</a></p></div>;
   const zone = zoneById(room.zone);
+  const fl = PLAN_FLOOR[room.plan];
+  const crop = room.plan && room.areas?.length && !(own && !room.virtual);
 
   return (
     <>
       <div className="room-crumb" style={{ padding: "10px 18px 0" }}>
         <div className="crumb">
-          <a href="#/">Översikt</a> / <a href={"#/omrade/" + room.zone}>{zone?.name}</a> / {room.name}
+          {room.virtual
+            ? <><a href={"#/vaning/" + fl?.floor}>Våningar</a> / <a href={"#/vaning/" + fl?.floor}>{fl?.title}</a> / {room.name}</>
+            : <><a href="#/">Översikt</a> / <a href={"#/omrade/" + room.zone}>{zone?.name}</a> / {room.name}</>}
         </div>
       </div>
       <div className="tabs">
@@ -62,8 +82,12 @@ export default function Room({ roomId, roomsApi }) {
             {label}
           </button>
         ))}
+        {tab === "plan" && room.plan && !room.virtual && (
+          <button className={"btn" + (own ? " primary" : "")} style={{ marginLeft: "auto" }} onClick={toggleOwn}
+            title="Utrymmets egen, äldre ritning (arkiv) i stället för utsnittet av hela planet">{own ? "Visa utsnitt av planet" : "Egen ritning (arkiv)"}</button>
+        )}
         {tab === "plan" && inspo.length > 0 && (
-          <button className={"btn" + (showInspo ? " primary" : "")} style={{ marginLeft: "auto" }} onClick={toggleInspo}>
+          <button className={"btn" + (showInspo ? " primary" : "")} style={{ marginLeft: room.plan && !room.virtual ? 0 : "auto" }} onClick={toggleInspo}>
             ✨ Inspo ({inspo.length})
           </button>
         )}
@@ -72,7 +96,9 @@ export default function Room({ roomId, roomsApi }) {
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: narrow ? "column" : "row" }}>
           {showInspo && inspo.length > 0 && <InspoPanel items={inspo} narrow={narrow} />}
           <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
-            <RoomPlanner key={room.id} storageKey={planKey(room.id)} title={room.name.toUpperCase()} />
+            {crop
+              ? <RoomPlanner key={room.id + ":crop"} storageKey={planKey(room.plan)} focus={room.areas} title={room.name.toUpperCase()} />
+              : <RoomPlanner key={room.id} storageKey={planKey(room.id)} title={room.name.toUpperCase() + (room.plan ? " (ARKIV)" : "")} />}
           </div>
         </div>
       ) : (
@@ -87,7 +113,7 @@ export default function Room({ roomId, roomsApi }) {
                 {tab === "anteckningar" && (<><h2>Anteckningar — {room.name}</h2><p className="sub" style={{ marginTop: -4 }}>Kladdanteckningar — snabba, tillfälliga noteringar. För en samlad beskrivning, använd “Beskrivning” under Dokument.</p><Notes space={space} update={update} placeholder={`Kladd för ${room.name} …`} /></>)}
                 <VersionHistory storageKey={spaceKey(room.id)} />
                 {tab === "anteckningar" && (
-                  <><h2>Planritningens historik</h2><VersionHistory storageKey={planKey(room.id)} /></>
+                  <><h2>Planritningens historik</h2><VersionHistory storageKey={planKey(crop ? room.plan : room.id)} /></>
                 )}
               </>
             )}

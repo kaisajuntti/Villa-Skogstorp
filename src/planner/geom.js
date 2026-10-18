@@ -255,11 +255,9 @@ export function areaSummary(grid, areas) {
   if (!grid || !areas?.length) return null;
   const { X, Y, nx, ny, blocked } = grid;
   const find = (A, v) => { let lo = 0, hi = A.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (A[m] <= v) lo = m; else hi = m - 1; } return lo; };
-  const cellA = (c) => { const i = c % nx, j = (c - i) / nx; return (X[i + 1] - X[i]) * (Y[j + 1] - Y[j]); };
   // label every free region (a region touching the grid border is the outside) and find each wall cell's two
   // neighbouring regions across its thinner direction – cached per grid, labels only pick kinds
-  if (!regionCache.has(grid)) regionCache.set(grid, regions(grid, cellA));
-  const { reg, regArea, regOut, wallCells } = regionCache.get(grid);
+  const { reg, regArea, regOut, wallCells } = gridRegions(grid);
   const kindOf = new Map(), byArea = {}, sum = { boa: 0, bia: 0, ej: 0 }, rooms = { boa: 0, bia: 0, ej: 0 }, walls = { boa: 0, bia: 0, ej: 0 };
   for (const ar of areas) {
     const x = ar.x, y = ar.y;
@@ -278,6 +276,47 @@ export function areaSummary(grid, areas) {
   return { byArea, sum, rooms, walls };
 }
 const regionCache = new WeakMap();
+function gridRegions(grid) {
+  if (!regionCache.has(grid)) {
+    const { X, Y, nx } = grid;
+    regionCache.set(grid, regions(grid, (c) => { const i = c % nx, j = (c - i) / nx; return (X[i + 1] - X[i]) * (Y[j + 1] - Y[j]); }));
+  }
+  return regionCache.get(grid);
+}
+
+// Index of the closed room region at (x, y), or -1 (in a wall, outside, or open to the outside).
+export function regionAt(grid, x, y) {
+  if (!grid) return -1;
+  const { X, Y, nx, ny } = grid;
+  if (x <= X[0] || x >= X[nx] || y <= Y[0] || y >= Y[ny]) return -1;
+  const find = (A, v) => { let lo = 0, hi = A.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (A[m] <= v) lo = m; else hi = m - 1; } return lo; };
+  const { reg, regOut } = gridRegions(grid);
+  const r = reg[find(Y, y) * nx + find(X, x)];
+  return r < 0 || regOut[r] ? -1 : r;
+}
+
+// The regions as rectangles [x0, y0, x1, y1] (row runs, stacked runs merged), grown by pad mm –
+// for highlighting a room or masking everything around a focused one.
+export function regionRects(grid, regIds, pad = 0) {
+  if (!grid || !regIds.length) return [];
+  const { X, Y, nx, ny } = grid, { reg } = gridRegions(grid), want = new Set(regIds);
+  let open = new Map(); const out = [];
+  for (let j = 0; j < ny; j++) {
+    const next = new Map();
+    for (let i = 0; i < nx; i++) {
+      if (!want.has(reg[j * nx + i])) continue;
+      let k = i; while (k + 1 < nx && want.has(reg[j * nx + k + 1])) k++;
+      const key = i + ":" + k, prev = open.get(key);
+      if (prev) { prev[3] = Y[j + 1]; next.set(key, prev); open.delete(key); }
+      else next.set(key, [X[i], Y[j], X[k + 1], Y[j + 1]]);
+      i = k;
+    }
+    for (const r of open.values()) out.push(r);
+    open = next;
+  }
+  for (const r of open.values()) out.push(r);
+  return out.map(([a, b, c, d]) => [a - pad, b - pad, c + pad, d + pad]);
+}
 function regions(grid, cellA) {
   const { X, Y, nx, ny, blocked } = grid;
   const reg = new Int32Array(nx * ny).fill(-1), regArea = [], regOut = [];

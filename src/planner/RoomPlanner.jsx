@@ -3,10 +3,11 @@ import { storage } from "../storage.js";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
 import { buildPlanSvg, itemLabel, coveredItemIds } from "./planSvg.js";
-import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, AREA_KINDS, fmtM2 } from "./geom.js";
+import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, AREA_KINDS, fmtM2, regionAt, regionRects } from "./geom.js";
 
 // Ported from kok-planner-v2 (Claude artifact) — behavior parity.
-// Props: storageKey (per-room persistence key), title (room name for header).
+// Props: storageKey (per-room persistence key), title (room name for header),
+// focus (optional area ids: show only those rooms of a whole-floor plan, the rest dimmed but still editable).
 
 // ---------- constants ----------
 const WALL = 200;
@@ -121,7 +122,7 @@ function downscaleImage(file, maxDim = 1600, quality = 0.72) {
   });
 }
 
-export default function RoomPlanner({ storageKey, title }) {
+export default function RoomPlanner({ storageKey, title, focus = null }) {
   const readOnly = !canEdit();
   const [room, setRoom] = useState({ w: 3500, l: 6430 });
   const [openings, setOpenings] = useState([]); // {id, wall, pos, len, kind, flip}
@@ -135,6 +136,7 @@ export default function RoomPlanner({ storageKey, title }) {
   const [status, setStatus] = useState("");
   const [view, setView] = useState(null); // null = fit view; {zoom, cx, cy}
   const [full, setFull] = useState(false); // fullscreen the plan (hide app chrome)
+  const [focusOn, setFocusOn] = useState(true); // focus mode: zoomed to the room(s) vs the whole floor
   const [wStr, setWStr] = useState("");    // raw text for the Bredd/Längd inputs
   const [lStr, setLStr] = useState("");
   const [bgImg, setBgImg] = useState(null); // { dataUrl, w, h } reference image
@@ -283,6 +285,19 @@ export default function RoomPlanner({ storageKey, title }) {
   const legend = areaLegend(summary);
   const legendAt = [bx0, by1 + 500];
   if (legend.length) by1 += 500 + legend.length * LEGEND_STEP + 200;
+  // Focus: the fit view is the focused rooms (walls + a margin for nearby dims); the rest is dimmed by a mask.
+  const focusKey = focus ? focus.join(",") : "";
+  const focusRects = useMemo(() => {
+    if (!focusKey || !grid) return null;
+    const ids = new Set(focusKey.split(","));
+    const regs = [...new Set(areas.filter((a) => ids.has(a.id)).map((a) => regionAt(grid, a.x, a.y)).filter((r) => r >= 0))];
+    return regs.length ? regionRects(grid, regs, 0) : null;
+  }, [focusKey, grid, areas]);
+  const focused = !!(focusRects && focusOn);
+  if (focused) {
+    bx0 = Math.min(...focusRects.map((r) => r[0])) - 900; by0 = Math.min(...focusRects.map((r) => r[1])) - 900;
+    bx1 = Math.max(...focusRects.map((r) => r[2])) + 900; by1 = Math.max(...focusRects.map((r) => r[3])) + 900;
+  }
   const BASE = { x: bx0 - M, y: by0 - M, w: (bx1 - bx0) + 2 * M, h: (by1 - by0) + 2 * M };
   const zoom = view?.zoom ?? 1;
   const cx = view?.cx ?? BASE.x + BASE.w / 2;
@@ -1107,6 +1122,10 @@ export default function RoomPlanner({ storageKey, title }) {
           {!readOnly && (
             <button style={{ ...btn, whiteSpace: "nowrap", opacity: undoN ? 1 : 0.4 }} disabled={!undoN} onClick={undo} title="Ångra">↶<span className="pl-lbl"> Ångra</span></button>
           )}
+          {focusRects && (
+            <button style={{ ...(focusOn ? btn : btnOn), whiteSpace: "nowrap" }} onClick={() => { setFocusOn((f) => !f); setView(null); }}
+              title={focusOn ? "Visa hela planet" : "Visa bara rummet"}>▣<span className="pl-lbl">{focusOn ? " Hela planet" : " Bara rummet"}</span></button>
+          )}
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={printPlan} title="PDF">⬇<span className="pl-lbl"> PDF</span></button>
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={() => setFull((f) => !f)}>
             {full ? "✕" : "⤢"}<span className="pl-lbl">{full ? " Stäng" : " Helskärm"}</span>
@@ -1463,6 +1482,17 @@ export default function RoomPlanner({ storageKey, title }) {
             );
           })}
           </g>
+
+          {/* focus: dim everything but the focused rooms and their walls */}
+          {focused && (
+            <g style={{ pointerEvents: "none" }}>
+              <mask id="vs-focus-mask">
+                <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill="#fff" />
+                {focusRects.map((r, i) => <rect key={i} x={r[0] - 330} y={r[1] - 330} width={r[2] - r[0] + 660} height={r[3] - r[1] + 660} fill="#000" />)}
+              </mask>
+              <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill={paper} opacity="0.72" mask="url(#vs-focus-mask)" />
+            </g>
+          )}
 
           {/* wall-distance guides for selected item */}
           {selIt && (

@@ -240,6 +240,16 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   Decisions taken while drawing (to confirm with the owner): källare "NY VALVÖPPNING" drawn as a plain opening (the only
   way into vinkällare/install once the old stair goes); murstock on P1 and the skorsten foundation in the källare
   removed; tvätt + its bay are one room; P1 doors/windows the old tracing missed were added from the drawing.
+- **Rum på hela planet (2026-10-18)** – the three whole-floor plans are the source: `space:floors.floors[].plan` =
+  u-k-hela / u-p1-hela / u-p2-hela. **Våningar** (`Floors.jsx` `LivePlan`) draws the live plan (`buildPlanSvg`, dims
+  toggle) with every room label's region clickable (`regionAt`/`regionRects` in geom.js) → **`#/rum/<planId>:<areaId>`**
+  = a *virtual room* (`src/floorRooms.js`: name = floor short + pretty label, own space record `space:<planId>:<areaId>`).
+  Lists: Rum (m², BOA/BIA tag) + Utrymmen = rooms-list entries with **`{ plan, areas:[areaIds] }`** (groups, e.g.
+  P1 Entré = a3–a7). "Arkitektens ritning" = the old image view (per device `vs:v1:ui:floorView`).
+  The room page opens the floor plan in **focus mode** (`RoomPlanner focus={areaIds}`): fit view = the rooms' bbox +
+  900 mm, everything else dimmed by an SVG mask (still editable – walls, everything), "▣ Hela planet" toggles.
+  Utrymmen can show their old own drawing via "Egen ritning (arkiv)" (per device `vs:v1:ui:ownPlan`).
+  TODO step 4: comments/photos from the old utrymme plans → the floor plans, PDF per room from the crop.
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
     geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a

@@ -247,6 +247,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
     1 mm tolerance against half-millimetre slits, diagonal walls block every cell they touch).
     Open plans are split with a **Rumsgräns** (wall with `sep:true`: dashed, no openings, only splits areas;
     toggle on a selected wall in ✏️ Väggar).
+  - **BOA/BIA live (2026-10-18)**: each label has `kind` (absent = BOA, `"bia"`, `"ej"` = not counted, e.g. the
+    stairwell on the upper floor – a stair counts on the floor it starts from); buttons BOA/BIA/Räknas ej on a
+    selected label. `areaSummary(grid, areas)` = per-label m² + BOA/BIA totals per SS 21054: to the inside of the
+    outer walls, interior walls included (a wall between two counted rooms split half/half; walls towards the outside
+    or an unlabelled space like a krypgrund not counted). Region labelling is cached per wall grid (dragging a label
+    ≈ 1 ms). The summary box (`areaLegend`) is drawn under the plan in the planner and the PDF; the Ytor toolbar shows
+    BOA/BIA. Set 2026-10-18: källare förråd/vinkällare/install = BIA, P2 trapphall = ej → BOA K 44,6 + P1 135,6 +
+    P2 104,8 ≈ 285 m², BIA 39,1 m².
 
 ### Inspirationsbilder (2026-10-04)
 - Space field **`inspo: [{id, title, photo, path, note}]`** (AI renders / moodboards of the finished room). `InspoGallery`

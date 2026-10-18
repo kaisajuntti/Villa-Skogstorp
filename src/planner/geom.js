@@ -244,5 +244,83 @@ export function areaAt(grid, x, y) {
   return area / 1e6;
 }
 
+// Room area classes for the floor summary (SS 21054): BOA boarea, BIA biarea, EJ = not counted (e.g. the
+// stairwell on the upper floor – a stair counts on the floor it starts from).
+export const AREA_KINDS = [["boa", "BOA"], ["bia", "BIA"], ["ej", "Räknas ej"]];
+
+// Floor summary: m² per room label plus BOA/BIA totals the way SS 21054 measures them – to the inside of the
+// outer walls, interior walls included (a wall between two counted rooms is split half/half; a wall towards the
+// outside or an unlabelled space such as a krypgrund is not counted).
+export function areaSummary(grid, areas) {
+  if (!grid || !areas?.length) return null;
+  const { X, Y, nx, ny, blocked } = grid;
+  const find = (A, v) => { let lo = 0, hi = A.length - 2; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (A[m] <= v) lo = m; else hi = m - 1; } return lo; };
+  const cellA = (c) => { const i = c % nx, j = (c - i) / nx; return (X[i + 1] - X[i]) * (Y[j + 1] - Y[j]); };
+  // label every free region (a region touching the grid border is the outside) and find each wall cell's two
+  // neighbouring regions across its thinner direction – cached per grid, labels only pick kinds
+  if (!regionCache.has(grid)) regionCache.set(grid, regions(grid, cellA));
+  const { reg, regArea, regOut, wallCells } = regionCache.get(grid);
+  const kindOf = new Map(), byArea = {}, sum = { boa: 0, bia: 0, ej: 0 }, rooms = { boa: 0, bia: 0, ej: 0 }, walls = { boa: 0, bia: 0, ej: 0 };
+  for (const ar of areas) {
+    const x = ar.x, y = ar.y;
+    if (x <= X[0] || x >= X[nx] || y <= Y[0] || y >= Y[ny]) { byArea[ar.id] = null; continue; }
+    const r = reg[find(Y, y) * nx + find(X, x)];
+    if (r < 0 || regOut[r]) { byArea[ar.id] = null; continue; }
+    byArea[ar.id] = regArea[r] / 1e6;
+    if (!kindOf.has(r)) { const k = ar.kind || "boa"; kindOf.set(r, k); rooms[k] += regArea[r] / 1e6; }
+  }
+  for (const [ra, rb, a] of wallCells) {
+    const ka = kindOf.get(ra), kb = kindOf.get(rb);
+    if (!ka || !kb) continue; // towards the outside / an unlabelled space: measured to the inside face
+    walls[ka] += a / 2e6; walls[kb] += a / 2e6;
+  }
+  for (const k of Object.keys(sum)) sum[k] = rooms[k] + walls[k];
+  return { byArea, sum, rooms, walls };
+}
+const regionCache = new WeakMap();
+function regions(grid, cellA) {
+  const { X, Y, nx, ny, blocked } = grid;
+  const reg = new Int32Array(nx * ny).fill(-1), regArea = [], regOut = [];
+  for (let s = 0; s < nx * ny; s++) {
+    if (blocked[s] || reg[s] >= 0) continue;
+    const r = regArea.length; let a = 0, out = false; const st = [s]; reg[s] = r;
+    while (st.length) {
+      const c = st.pop(), i = c % nx, j = (c - i) / nx;
+      if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) out = true;
+      a += cellA(c);
+      for (const n of [i > 0 ? c - 1 : -1, i < nx - 1 ? c + 1 : -1, j > 0 ? c - nx : -1, j < ny - 1 ? c + nx : -1])
+        if (n >= 0 && !blocked[n] && reg[n] < 0) { reg[n] = r; st.push(n); }
+    }
+    regArea.push(a); regOut.push(out);
+  }
+  // wall cells: the nearest free cell on each side, across the thinner direction of the wall
+  const wallCells = [];
+  const side = (c, d, max) => { let k = c + d, n = 0; while (n++ < max && k >= 0 && k < nx * ny && blocked[k]) k += d; return k >= 0 && k < nx * ny && !blocked[k] ? k : -1; };
+  for (let c = 0; c < nx * ny; c++) {
+    if (!blocked[c]) continue;
+    const i = c % nx, l = side(c, -1, i), r = side(c, 1, nx - 1 - i), u = side(c, -nx, ny), d = side(c, nx, ny);
+    const sx = l >= 0 && r >= 0 && Math.floor(l / nx) === Math.floor(c / nx) && Math.floor(r / nx) === Math.floor(c / nx) ? X[r % nx] - X[l % nx + 1] : Infinity;
+    const sy = u >= 0 && d >= 0 ? Y[Math.floor(d / nx)] - Y[Math.floor(u / nx) + 1] : Infinity;
+    if (sx === Infinity && sy === Infinity) continue;
+    const [a, b] = sx <= sy ? [l, r] : [u, d];
+    wallCells.push([reg[a], reg[b], cellA(c)]);
+  }
+  return { reg, regArea, regOut, wallCells };
+}
+
+// Lines of the floor summary box drawn under the plan (planner + PDF).
+export function areaLegend(sm) {
+  if (!sm) return [];
+  const f = (v) => v.toFixed(1).replace(".", ",") + " m²";
+  const out = [{ t: "BOA " + f(sm.sum.boa), big: true }];
+  if (sm.sum.bia > 0.05) out.push({ t: "BIA " + f(sm.sum.bia), big: true });
+  out.push({ t: `rum ${f(sm.rooms.boa + sm.rooms.bia)} + innerväggar ${f(sm.walls.boa + sm.walls.bia)}` });
+  if (sm.sum.ej > 0.05) out.push({ t: "räknas ej " + f(sm.sum.ej) + " (trapphål o.d.)" });
+  out.push({ t: "SS 21054: till ytterväggarnas insida" });
+  return out;
+}
+export const LEGEND_STEP = 360;
+export const kindTag = (k) => (k === "bia" ? " · BIA" : k === "ej" ? " · ej" : "");
+
 // "10,4 m²" (Swedish decimal comma), or "– m²" for an open region.
 export const fmtM2 = (v) => (v == null ? "– m²" : v.toFixed(1).replace(".", ",") + " m²");

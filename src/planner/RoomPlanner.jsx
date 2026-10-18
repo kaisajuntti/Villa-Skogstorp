@@ -3,7 +3,7 @@ import { storage } from "../storage.js";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
 import { buildPlanSvg, itemLabel, coveredItemIds } from "./planSvg.js";
-import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaAt, fmtM2 } from "./geom.js";
+import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, AREA_KINDS, fmtM2 } from "./geom.js";
 
 // Ported from kok-planner-v2 (Claude artifact) — behavior parity.
 // Props: storageKey (per-room persistence key), title (room name for header).
@@ -277,6 +277,12 @@ export default function RoomPlanner({ storageKey, title }) {
   const liveDims = resolveDims(dims, { room, walls, items, openings });
   const db = dimsBounds(liveDims);
   if (db) { bx0 = Math.min(bx0, db[0]); by0 = Math.min(by0, db[1]); bx1 = Math.max(bx1, db[2]); by1 = Math.max(by1, db[3]); }
+  // Room areas + BOA/BIA summary, recomputed from the walls on every change; the summary box sits under the plan.
+  const grid = useMemo(() => (areas.length ? areaGrid(room, walls) : null), [areas.length, room, walls]);
+  const summary = useMemo(() => areaSummary(grid, areas), [grid, areas]);
+  const legend = areaLegend(summary);
+  const legendAt = [bx0, by1 + 500];
+  if (legend.length) by1 += 500 + legend.length * LEGEND_STEP + 200;
   const BASE = { x: bx0 - M, y: by0 - M, w: (bx1 - bx0) + 2 * M, h: (by1 - by0) + 2 * M };
   const zoom = view?.zoom ?? 1;
   const cx = view?.cx ?? BASE.x + BASE.w / 2;
@@ -284,8 +290,6 @@ export default function RoomPlanner({ storageKey, title }) {
   const VB = { w: BASE.w / zoom, h: BASE.h / zoom, x: cx - BASE.w / zoom / 2, y: cy - BASE.h / zoom / 2 };
   vbRef.current = VB;
   const itemsCovered = coveredItemIds(items);
-  // The m² grid of the walls (room labels).
-  const grid = useMemo(() => (areas.length ? areaGrid(room, walls) : null), [areas.length, room, walls]);
   const toSvg = useCallback((clientX, clientY) => {
     const r = svgRef.current.getBoundingClientRect();
     const vb = vbRef.current;
@@ -754,7 +758,7 @@ export default function RoomPlanner({ storageKey, title }) {
   const selCm = sel?.kind === "cm" ? comments.find((c) => c.id === sel.id) : null;
   const selDim = sel?.kind === "dim" ? liveDims.find((d) => d.id === sel.id) : null;
   const selArea = sel?.kind === "area" ? areas.find((a) => a.id === sel.id) : null;
-  const areaOf = (ar) => areaAt(grid, ar.x, ar.y);
+  const areaOf = (ar) => (summary ? summary.byArea[ar.id] : null);
   const commentNumber = (id) => comments.findIndex((c) => c.id === id) + 1;
   const updOp = (fn) => { pushUndo(); setOpenings((a) => a.map((o) => (o.id === sel.id ? fn(o) : o))); };
   const updIt = (fn) => { pushUndo(); setItems((a) => a.map((i) => (i.id === sel.id ? fn(i) : i))); };
@@ -1060,10 +1064,18 @@ export default function RoomPlanner({ storageKey, title }) {
         {isSel && <rect x={ar.x - 700} y={ar.y - 300} width="1400" height="560" rx="60" fill="rgba(90,122,140,0.15)" stroke={blue} strokeWidth="12" strokeDasharray="30 24" />}
         {interactive && !isSel && <rect x={ar.x - 600} y={ar.y - 260} width="1200" height="480" fill="transparent" />}
         {ar.name && <text x={ar.x} y={ar.y - 20} textAnchor="middle" fontSize="170" letterSpacing="20" fill={ink} opacity="0.8">{ar.name}</text>}
-        <text x={ar.x} y={ar.y + 170} textAnchor="middle" fontSize="150" fontFamily={mono} fill={m2 == null ? red : ink} opacity="0.8">{fmtM2(m2)}</text>
+        <text x={ar.x} y={ar.y + 170} textAnchor="middle" fontSize="150" fontFamily={mono} fill={m2 == null ? red : ink} opacity="0.8">{fmtM2(m2)}{kindTag(ar.kind)}</text>
       </g>
     );
   };
+  const renderLegend = () => legend.length > 0 && (
+    <g style={{ pointerEvents: "none" }}>
+      {legend.map((l, i) => (
+        <text key={i} x={legendAt[0]} y={legendAt[1] + i * LEGEND_STEP + 280} fontSize={l.big ? 300 : 190} fontWeight={l.big ? 700 : 400}
+          fontFamily={l.big ? undefined : mono} fill={l.big ? ink : "#7A756E"}>{l.t}</text>
+      ))}
+    </g>
+  );
 
   // ---------- UI ----------
   const btn = { background: "#fff", border: `1.5px solid ${ink}`, borderRadius: 8, color: ink, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", cursor: "pointer", flex: "0 0 auto" };
@@ -1159,7 +1171,7 @@ export default function RoomPlanner({ storageKey, title }) {
 
       {!readOnly && !full && mode === "ytor" && (
         <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13 }}>{areas.length} ytor · summa <b style={{ fontFamily: mono }}>{fmtM2(areas.reduce((t, a) => t + (areaOf(a) || 0), 0))}</b></span>
+          <span style={{ fontSize: 13 }}>{areas.length} ytor · <b style={{ fontFamily: mono }}>BOA {fmtM2(summary?.sum.boa ?? 0)}</b>{summary?.sum.bia > 0.05 && <> · <b style={{ fontFamily: mono }}>BIA {fmtM2(summary.sum.bia)}</b></>}</span>
           <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>Tryck i ett rum för att sätta namn + m² (räknas från väggarna, dörrar räknas som stängda) · dra etiketten för att flytta · öppna planlösningar delas med en rumsgräns under ✏️ Väggar</span>
         </div>
       )}
@@ -1389,8 +1401,9 @@ export default function RoomPlanner({ storageKey, title }) {
           {/* saved dimension lines (part of the drawing) */}
           {liveDims.map(renderDim)}
 
-          {/* room labels with m² */}
+          {/* room labels with m² + the BOA/BIA summary */}
           {areas.map(renderArea)}
+          {renderLegend()}
 
           {/* ruler measurements (multiple) + live one */}
           {(measures.length > 0 || mStart) && (
@@ -1601,6 +1614,10 @@ export default function RoomPlanner({ storageKey, title }) {
             <>
               <div style={{ fontWeight: 600 }}>▦ {selArea.name || "Yta"} <span style={{ fontFamily: mono, color: blue, fontSize: 13 }}>{fmtM2(areaOf(selArea))}</span></div>
               <button style={btn} onClick={() => { const n = prompt("Namn:", selArea.name); if (n !== null) { pushUndo(); setAreas((a) => a.map((r) => (r.id === selArea.id ? { ...r, name: n.trim() } : r))); } }}>✎ Namn</button>
+              {AREA_KINDS.map(([k, lbl]) => (
+                <button key={k} style={(selArea.kind || "boa") === k ? { ...btnOn, background: blue, borderColor: blue } : btn}
+                  onClick={() => { pushUndo(); setAreas((a) => a.map((r) => (r.id === selArea.id ? { ...r, kind: k === "boa" ? undefined : k } : r))); }}>{lbl}</button>
+              ))}
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
             </>
           )}

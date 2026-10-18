@@ -2,7 +2,7 @@
 // be rendered without mounting the interactive RoomPlanner. Mirrors the planner's
 // on-screen drawing (walls, openings, furniture, numbered comment markers) minus
 // all interaction/selection chrome.
-import { resolveDims, dimGeom, dimsBounds, areaGrid, areaAt, fmtM2 } from "./geom.js";
+import { resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, fmtM2 } from "./geom.js";
 
 const WALL = 200;
 const M = 480;
@@ -141,6 +141,9 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
   const liveDims = resolveDims(dims, { room, walls, items, openings });
   const db = dimsBounds(liveDims);
   if (db) { bx0 = Math.min(bx0, db[0]); by0 = Math.min(by0, db[1]); bx1 = Math.max(bx1, db[2]); by1 = Math.max(by1, db[3]); }
+  const summary = areas.length ? areaSummary(areaGrid(room, walls), areas) : null;
+  const legend = areaLegend(summary), legendAt = [bx0, by1 + 500];
+  if (legend.length) by1 += 500 + legend.length * LEGEND_STEP + 200;
   const VB = { x: bx0 - M, y: by0 - M, w: (bx1 - bx0) + 2 * M, h: (by1 - by0) + 2 * M };
 
   let s = "";
@@ -191,12 +194,14 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
     const rot = g.ang ? ` transform="rotate(${g.ang} ${g.lab[0]} ${g.lab[1]})"` : "";
     s += `<text x="${g.lab[0]}" y="${g.lab[1]}" font-family="${mono}" font-size="130" fill="${blue}" text-anchor="middle" dominant-baseline="central"${rot}>${g.L}</text>`;
   }
-  if (areas.length) {
-    const grid = areaGrid(room, walls);
+  if (summary) {
     for (const ar of areas) {
       if (ar.name) s += `<text x="${ar.x}" y="${ar.y - 20}" text-anchor="middle" font-size="170" letter-spacing="20" fill="${ink}" opacity="0.8" font-family="'Avenir Next','Helvetica Neue',Arial,sans-serif">${esc(ar.name)}</text>`;
-      s += `<text x="${ar.x}" y="${ar.y + 170}" text-anchor="middle" font-size="150" font-family="${mono}" fill="${ink}" opacity="0.8">${fmtM2(areaAt(grid, ar.x, ar.y))}</text>`;
+      s += `<text x="${ar.x}" y="${ar.y + 170}" text-anchor="middle" font-size="150" font-family="${mono}" fill="${ink}" opacity="0.8">${fmtM2(summary.byArea[ar.id])}${kindTag(ar.kind)}</text>`;
     }
+    legend.forEach((l, i) => {
+      s += `<text x="${legendAt[0]}" y="${legendAt[1] + i * LEGEND_STEP + 280}" font-size="${l.big ? 300 : 190}" font-weight="${l.big ? 700 : 400}" fill="${l.big ? ink : "#7A756E"}" font-family="${l.big ? "'Avenir Next','Helvetica Neue',Arial,sans-serif" : mono}">${esc(l.t)}</text>`;
+    });
   }
   for (const it of items) s += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${cab}" stroke="${ink}" stroke-width="14"/>`;
   const covered = coveredItemIds(items);

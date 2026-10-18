@@ -5,6 +5,7 @@
 // also push to Supabase and `syncPull` merges remote changes back in.
 import { getConfig, canEdit } from "./config.js";
 import * as sync from "./sync.js";
+import { mergePlan } from "./merge.js";
 
 export const PREFIX = "vs:v1:";
 export const roomsKey = PREFIX + "rooms";
@@ -65,10 +66,51 @@ export const getSyncStatus = () => syncStatus;
 const announce = () => window.dispatchEvent(new Event("vs-syncstatus"));
 const setStatus = (s) => { syncStatus = s; announce(); };
 
+// Plans merge instead of overwrite: `base` = the version this device last synced (kept per plan key).
+const baseKey = (k) => PREFIX + "_base:" + k.slice(PREFIX.length);
+const getBase = (k) => { try { const v = localStorage.getItem(baseKey(k)); return v ? JSON.parse(v) : null; } catch { return null; } };
+const setBase = (k, data) => { try { localStorage.setItem(baseKey(k), JSON.stringify(data)); } catch { /* quota: merge falls back to ours-wins */ } };
+const isPlan = (k) => k.startsWith(PREFIX + "plan:");
+const sameAt = (a, b) => a && b && new Date(a).getTime() === new Date(b).getTime();
+const queues = new Map(); // one push at a time per key, in order
+
+async function pushPlanMerged(cfg, key, data) {
+  const parts = sync.keyParts(key);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const remote = await sync.fetchOne(cfg, parts.kind, parts.key);
+    const at = new Date().toISOString();
+    if (!remote) { await sync.push(cfg, parts.kind, parts.key, data, at); setMetaAt(key, at); setBase(key, data); return; }
+    // someone else wrote since we last synced: merge their changes into ours
+    const foreign = !sameAt(remote.updated_at, getMeta()[key]);
+    const merged = foreign ? mergePlan(getBase(key), data, remote.data) : data;
+    if (await sync.updateIf(cfg, parts.kind, parts.key, merged, at, remote.updated_at)) {
+      setMetaAt(key, at); setBase(key, merged);
+      if (merged !== data) {
+        // keep the merged result locally unless this device saved again meanwhile (the next push merges that)
+        if (localStorage.getItem(key) === JSON.stringify(data)) { localStorage.setItem(key, JSON.stringify(merged)); window.dispatchEvent(new Event("vs-sync")); }
+      }
+      return;
+    }
+  }
+  throw new Error("could not merge " + key);
+}
+
 function maybePush(key, value) {
   const cfg = getConfig();
   if (!cfg || !canEdit() || !sync.isSyncable(key)) return;
   let data; try { data = JSON.parse(value); } catch { return; }
+  if (isPlan(key)) {
+    setStatus("pushing");
+    const prev = queues.get(key) || Promise.resolve();
+    const job = prev.catch(() => {}).then(() => {
+      // only the newest local value is worth pushing
+      let cur; try { cur = JSON.parse(localStorage.getItem(key)); } catch { cur = data; }
+      return pushPlanMerged(cfg, key, cur ?? data);
+    });
+    queues.set(key, job);
+    job.then(() => setStatus("idle")).catch(() => setStatus("error"));
+    return;
+  }
   const parts = sync.keyParts(key);
   const at = new Date().toISOString();
   setMetaAt(key, at);
@@ -139,6 +181,7 @@ async function doPull() {
           if (isBig(k)) await bigSet(k, JSON.stringify(r.data));
           else localStorage.setItem(k, JSON.stringify(r.data));
           setMetaAt(k, r.updated_at);
+          if (isPlan(k)) setBase(k, r.data);
           changed++;
         } catch { failed++; continue; }
       }

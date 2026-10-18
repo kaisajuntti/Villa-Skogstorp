@@ -74,6 +74,31 @@ export async function push(cfg, kind, key, data, updatedAt) {
   return true;
 }
 
+// One row (or null): the current server version, to merge against before writing.
+export async function fetchOne(cfg, kind, key) {
+  const r = await fetch(
+    `${base(cfg)}/vs_items?select=data,updated_at&workspace=eq.${enc(cfg.workspace)}&kind=eq.${enc(kind)}&key=eq.${enc(key)}`,
+    { headers: await headers() }
+  );
+  if (!r.ok) throw new Error("fetch HTTP " + r.status);
+  const rows = await r.json();
+  return rows[0] || null;
+}
+
+// Write only if the row is still the version we merged against (`prevAt`); false = someone wrote in between.
+export async function updateIf(cfg, kind, key, data, updatedAt, prevAt) {
+  const r = await fetch(
+    `${base(cfg)}/vs_items?workspace=eq.${enc(cfg.workspace)}&kind=eq.${enc(kind)}&key=eq.${enc(key)}&updated_at=eq.${enc(prevAt)}`,
+    {
+      method: "PATCH",
+      headers: { ...(await headers()), Prefer: "return=representation" },
+      body: JSON.stringify({ data, updated_at: updatedAt, updated_by: cfg.user || null }),
+    }
+  );
+  if (!r.ok) throw new Error("update HTTP " + r.status);
+  return (await r.json()).length > 0;
+}
+
 export async function remove(cfg, kind, key) {
   const r = await fetch(
     `${base(cfg)}/vs_items?workspace=eq.${enc(cfg.workspace)}&kind=eq.${enc(kind)}&key=eq.${enc(key)}`,

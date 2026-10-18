@@ -93,6 +93,11 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   same-key collisions are last-write-wins but the prior value is in `vs_versions`.
 - Pull happens on app load and on window focus/visibility; hooks + planner listen for the
   `vs-sync` event and reload (planner skips reload mid-drag; space skips if dirty).
+- **Per-object merge for plans (2026-10-18)** (`src/merge.js`, `storage.js` `pushPlanMerged`): plan keys are pushed through a
+  per-key queue; if the server row changed since our last sync (updated_at ≠ `_meta`), a three-way merge (base =
+  `vs:v1:_base:plan:<id>`, last synced copy) merges id-lists (walls, openings, items, dims, comments, areas) per object and
+  per field — two people can edit different things in the same floor plan at once; true same-field conflicts = ours wins
+  (prior value in vs_versions). Written with a conditional PATCH (`updateIf`, `updated_at=eq.<prev>`), retried ≤ 4×.
 - **Version history UI**: `VersionHistory` (per room plan, per room space, project space)
   lists snapshots with Restore. Restore pushes the chosen data as current (which snapshots
   the current state first). Sync-only feature (versions live in Supabase).

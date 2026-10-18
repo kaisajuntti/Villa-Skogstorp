@@ -2,6 +2,8 @@
 // be rendered without mounting the interactive RoomPlanner. Mirrors the planner's
 // on-screen drawing (walls, openings, furniture, numbered comment markers) minus
 // all interaction/selection chrome.
+import { resolveDims, dimGeom, dimsBounds, areaGrid, areaAt, fmtM2 } from "./geom.js";
+
 const WALL = 200;
 const M = 480;
 const ink = "#33312E", blue = "#5A7A8C", paper = "#FAF8F3", cab = "#E4EAED";
@@ -127,7 +129,7 @@ export function coveredItemIds(items) {
 }
 
 // Build a standalone SVG string for a plan (mm units). `bgImg` = {dataUrl,w,h}, `bgT` = transform.
-export function buildPlanSvg({ room, openings = [], items = [], walls = [], comments = [], dims = [], bgImg = null, bgT = null, embedBg = true }) {
+export function buildPlanSvg({ room, openings = [], items = [], walls = [], comments = [], dims = [], areas = [], bgImg = null, bgT = null, embedBg = true }) {
   if (!room) room = { w: 3500, l: 6430 };
   let bx0 = -WALL, by0 = -WALL, bx1 = room.w + WALL, by1 = room.l + WALL;
   for (const it of items) {
@@ -136,6 +138,9 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
     if (it.x + it.w > bx1) bx1 = it.x + it.w;
     if (it.y + it.h > by1) by1 = it.y + it.h;
   }
+  const liveDims = resolveDims(dims, { room, walls, items, openings });
+  const db = dimsBounds(liveDims);
+  if (db) { bx0 = Math.min(bx0, db[0]); by0 = Math.min(by0, db[1]); bx1 = Math.max(bx1, db[2]); by1 = Math.max(by1, db[3]); }
   const VB = { x: bx0 - M, y: by0 - M, w: (bx1 - bx0) + 2 * M, h: (by1 - by0) + 2 * M };
 
   let s = "";
@@ -152,6 +157,7 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
       s += `<rect x="${seg.x}" y="${seg.y}" width="${seg.w}" height="${seg.h}" fill="${ink}"/>`;
   for (const w of walls) {
     if (!w.pts || w.pts.length < 2) continue;
+    if (w.sep) { s += `<polyline points="${w.pts.map((q) => q.join(",")).join(" ")}" fill="none" stroke="${ink}" stroke-width="14" stroke-dasharray="60 45" opacity="0.6"/>`; continue; }
     const T = w.w ?? WALL;
     for (let i = 0; i < w.pts.length - 1; i++) {
       const A = w.pts[i], B = w.pts[i + 1];
@@ -176,21 +182,21 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
     `<line x1="${-WALL - 220}" y1="0" x2="${-WALL - 220}" y2="${room.l}" stroke="${blue}" stroke-width="12"/>` +
     `<text x="${-WALL - 270}" y="${room.l / 2}" transform="rotate(-90 ${-WALL - 270} ${room.l / 2})">${room.l}</text></g>`;
   for (const o of openings) s += openingEls(o, room, walls);
-  for (const dm of dims) {
-    if (!dm.a || !dm.b) continue;
-    const [ax, ay] = dm.a, [bx, by] = dm.b;
-    const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
-    const nx = -dy / L, ny = dx / L, off = dm.off || 0, tick = 90;
-    const a2 = [ax + nx * off, ay + ny * off], b2 = [bx + nx * off, by + ny * off];
-    const mid = [(a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2], lab = off >= 0 ? 150 : -60;
-    if (off !== 0) {
-      s += `<line x1="${ax}" y1="${ay}" x2="${a2[0]}" y2="${a2[1]}" stroke="${blue}" stroke-width="8" stroke-dasharray="24 20"/>`;
-      s += `<line x1="${bx}" y1="${by}" x2="${b2[0]}" y2="${b2[1]}" stroke="${blue}" stroke-width="8" stroke-dasharray="24 20"/>`;
+  for (const dm of liveDims) {
+    const g = dimGeom(dm), [nx, ny] = g.n, tick = 90;
+    for (const [P, Q] of [[g.ext[0], g.a2], [g.ext[1], g.b2]])
+      if (Math.hypot(Q[0] - P[0], Q[1] - P[1]) > 1) s += `<line x1="${P[0]}" y1="${P[1]}" x2="${Q[0]}" y2="${Q[1]}" stroke="${blue}" stroke-width="8" stroke-dasharray="24 20"/>`;
+    s += `<line x1="${g.a2[0]}" y1="${g.a2[1]}" x2="${g.b2[0]}" y2="${g.b2[1]}" stroke="${blue}" stroke-width="12"/>`;
+    for (const P of [g.a2, g.b2]) s += `<line x1="${P[0] - nx * tick}" y1="${P[1] - ny * tick}" x2="${P[0] + nx * tick}" y2="${P[1] + ny * tick}" stroke="${blue}" stroke-width="12"/>`;
+    const rot = g.ang ? ` transform="rotate(${g.ang} ${g.lab[0]} ${g.lab[1]})"` : "";
+    s += `<text x="${g.lab[0]}" y="${g.lab[1]}" font-family="${mono}" font-size="130" fill="${blue}" text-anchor="middle" dominant-baseline="central"${rot}>${g.L}</text>`;
+  }
+  if (areas.length) {
+    const grid = areaGrid(room, walls);
+    for (const ar of areas) {
+      if (ar.name) s += `<text x="${ar.x}" y="${ar.y - 20}" text-anchor="middle" font-size="170" letter-spacing="20" fill="${ink}" opacity="0.8" font-family="'Avenir Next','Helvetica Neue',Arial,sans-serif">${esc(ar.name)}</text>`;
+      s += `<text x="${ar.x}" y="${ar.y + 170}" text-anchor="middle" font-size="150" font-family="${mono}" fill="${ink}" opacity="0.8">${fmtM2(areaAt(grid, ar.x, ar.y))}</text>`;
     }
-    s += `<line x1="${a2[0]}" y1="${a2[1]}" x2="${b2[0]}" y2="${b2[1]}" stroke="${blue}" stroke-width="12"/>`;
-    s += `<line x1="${a2[0] - nx * tick}" y1="${a2[1] - ny * tick}" x2="${a2[0] + nx * tick}" y2="${a2[1] + ny * tick}" stroke="${blue}" stroke-width="12"/>`;
-    s += `<line x1="${b2[0] - nx * tick}" y1="${b2[1] - ny * tick}" x2="${b2[0] + nx * tick}" y2="${b2[1] + ny * tick}" stroke="${blue}" stroke-width="12"/>`;
-    s += `<text x="${mid[0] + nx * lab}" y="${mid[1] + ny * lab}" font-family="${mono}" font-size="130" fill="${blue}" text-anchor="middle">${Math.round(L)}</text>`;
   }
   for (const it of items) s += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${cab}" stroke="${ink}" stroke-width="14"/>`;
   const covered = coveredItemIds(items);

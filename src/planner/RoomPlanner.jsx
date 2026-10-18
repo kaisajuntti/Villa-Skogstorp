@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { storage } from "../storage.js";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
 import { buildPlanSvg, itemLabel, coveredItemIds } from "./planSvg.js";
+import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaAt, fmtM2 } from "./geom.js";
 
 // Ported from kok-planner-v2 (Claude artifact) — behavior parity.
 // Props: storageKey (per-room persistence key), title (room name for header).
@@ -151,6 +152,8 @@ export default function RoomPlanner({ storageKey, title }) {
   const [mPreview, setMPreview] = useState(null); // live second point while dragging
   const [dims, setDims] = useState([]);         // saved dimension lines {id,a,b,off} (persistent, in plan)
   const [saveMeas, setSaveMeas] = useState(false); // when on, a completed measurement is saved as a dim
+  const [areas, setAreas] = useState([]);       // room labels {id,x,y,name}; m² computed from the walls
+  const mRefs = useRef({ a: null, b: null });   // anchors of the in-progress measurement's ends
   const [snapOn, setSnapOn] = useState(true);   // snap points to object/room/wall corners
   const [comments, setComments] = useState([]); // {id, x, y, tx, ty, text, photo?, photoPath?}
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -181,6 +184,7 @@ export default function RoomPlanner({ storageKey, title }) {
     walls: walls.map((w) => ({ ...w, pts: w.pts.map((p) => [...p]) })),
     comments: comments.map((c) => ({ ...c })),
     dims: dims.map((d) => ({ ...d, a: [...d.a], b: [...d.b] })),
+    areas: areas.map((a) => ({ ...a })),
     bg: bgT ? { ...bgT } : null,
   });
   const pushUndo = () => {
@@ -194,6 +198,7 @@ export default function RoomPlanner({ storageKey, title }) {
     setRoom(s.room); setOpenings(s.openings); setItems(s.items); setWalls(s.walls || []);
     setComments(s.comments || []);
     setDims(s.dims || []);
+    setAreas(s.areas || []);
     if (s.bg !== undefined) setBgT(s.bg);
     setSel(null); setGroup([]); setUndoN(undoRef.current.length);
   };
@@ -206,6 +211,7 @@ export default function RoomPlanner({ storageKey, title }) {
     setWalls(Array.isArray(s.walls) ? s.walls : []);
     setComments(Array.isArray(s.comments) ? s.comments : []);
     setDims(Array.isArray(s.dims) ? s.dims : []);
+    setAreas(Array.isArray(s.areas) ? s.areas : []);
     setBgT(s.bg || null);
   }, []);
   useEffect(() => {
@@ -248,12 +254,14 @@ export default function RoomPlanner({ storageKey, title }) {
     if (!loadedRef.current || !editedRef.current) return;
     const t = setTimeout(async () => {
       try {
-        await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(dims.length ? { dims } : {}), ...(bgT ? { bg: bgT } : {}) }));
+        // Dimension ends are stored resolved (anchors applied), so readers without the anchor logic stay right.
+        const sd = resolveDims(dims, { room, walls, items, openings });
+        await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(sd.length ? { dims: sd } : {}), ...(areas.length ? { areas } : {}), ...(bgT ? { bg: bgT } : {}) }));
         setStatus("Sparat");
       } catch (e) { setStatus("Kunde inte spara"); }
     }, 800);
     return () => clearTimeout(t);
-  }, [room, openings, items, walls, comments, dims, bgT, storageKey]);
+  }, [room, openings, items, walls, comments, dims, areas, bgT, storageKey]);
 
   // ---------- viewbox (zoom/pan aware) ----------
   const M = 480;
@@ -265,6 +273,10 @@ export default function RoomPlanner({ storageKey, title }) {
     if (it.x + it.w > bx1) bx1 = it.x + it.w;
     if (it.y + it.h > by1) by1 = it.y + it.h;
   }
+  // …and the saved dimension lines (exterior chains sit well outside the walls).
+  const liveDims = resolveDims(dims, { room, walls, items, openings });
+  const db = dimsBounds(liveDims);
+  if (db) { bx0 = Math.min(bx0, db[0]); by0 = Math.min(by0, db[1]); bx1 = Math.max(bx1, db[2]); by1 = Math.max(by1, db[3]); }
   const BASE = { x: bx0 - M, y: by0 - M, w: (bx1 - bx0) + 2 * M, h: (by1 - by0) + 2 * M };
   const zoom = view?.zoom ?? 1;
   const cx = view?.cx ?? BASE.x + BASE.w / 2;
@@ -272,6 +284,8 @@ export default function RoomPlanner({ storageKey, title }) {
   const VB = { w: BASE.w / zoom, h: BASE.h / zoom, x: cx - BASE.w / zoom / 2, y: cy - BASE.h / zoom / 2 };
   vbRef.current = VB;
   const itemsCovered = coveredItemIds(items);
+  // The m² grid of the walls (room labels).
+  const grid = useMemo(() => (areas.length ? areaGrid(room, walls) : null), [areas.length, room, walls]);
   const toSvg = useCallback((clientX, clientY) => {
     const r = svgRef.current.getBoundingClientRect();
     const vb = vbRef.current;
@@ -315,7 +329,7 @@ export default function RoomPlanner({ storageKey, title }) {
   const hitFreeWall = (p) => {
     let best = null, bestDist = Infinity;
     for (const w of walls) {
-      if (!w.pts || w.pts.length < 2) continue;
+      if (!w.pts || w.pts.length < 2 || w.sep) continue;
       const T = w.w ?? WALL;
       for (let i = 0; i < w.pts.length - 1; i++) {
         const A = w.pts[i], B = w.pts[i + 1];
@@ -339,31 +353,20 @@ export default function RoomPlanner({ storageKey, title }) {
     const s = Math.min(r.width / vb.w, r.height / vb.h);
     return s > 0 ? 1 / s : 1;
   };
-  const snapCandidates = () => {
-    const rw = room.w, rl = room.l;
-    const c = [[0, 0], [rw, 0], [0, rl], [rw, rl], [rw / 2, 0], [rw / 2, rl], [0, rl / 2], [rw, rl / 2]];
-    for (const it of items) {
-      const { x, y, w, h } = it;
-      c.push([x, y], [x + w, y], [x, y + h], [x + w, y + h],
-        [x + w / 2, y], [x + w / 2, y + h], [x, y + h / 2], [x + w, y + h / 2], [x + w / 2, y + h / 2]);
-    }
-    for (const w of walls) for (const q of w.pts) c.push(q);
-    for (const o of openings) {
-      const g = openGeom(o);
-      if (!g) continue;
-      c.push(pt(g.A, g.along, o.pos, g.inward), pt(g.A, g.along, o.pos + o.len, g.inward));
-    }
-    return c;
-  };
+  // Feature points (with anchors, so saved dimensions follow their wall/object).
   const snapPoint = (raw) => {
-    if (!snapOn) return { p: raw, snapped: false };
+    if (!snapOn) return { p: raw, snapped: false, ref: null };
     const T = 16 * pxToMm();
     let best = null, bestD = T;
-    for (const c of snapCandidates()) {
-      const d = Math.hypot(c[0] - raw[0], c[1] - raw[1]);
+    for (const c of featurePoints({ room, walls, items, openings })) {
+      const d = Math.hypot(c.p[0] - raw[0], c.p[1] - raw[1]);
       if (d < bestD) { bestD = d; best = c; }
     }
-    return best ? { p: [best[0], best[1]], snapped: true } : { p: raw, snapped: false };
+    // A wall face clearly closer than any corner/edge point wins (measure to the face, not a nearby object).
+    const f = faceSnap({ walls }, raw, T);
+    if (f && (!best || f.d * 3 < bestD)) return { p: f.p, snapped: true, ref: f.ref };
+    if (best) return { p: [best.p[0], best.p[1]], snapped: true, ref: best.ref };
+    return { p: raw, snapped: false, ref: null };
   };
 
   // ---------- pointer handlers ----------
@@ -394,9 +397,11 @@ export default function RoomPlanner({ storageKey, title }) {
       const s = snapPoint([p.x, p.y]);
       if (mStart == null) {
         setMStart(s.p);
+        mRefs.current = { a: s.ref, b: null };
         dragRef.current = { kind: "meas", first: true, moved: false };
       } else {
         setMPreview(s.snapped ? s.p : axisLock(mStart, s.p));
+        mRefs.current.b = s.snapped ? s.ref : null;
         dragRef.current = { kind: "meas", first: false, moved: false };
       }
       return;
@@ -449,6 +454,15 @@ export default function RoomPlanner({ storageKey, title }) {
     }
     if (!readOnly && mode === "kommentar") {
       addComment(snap(p.x), snap(p.y), cmType === "photo");
+      return;
+    }
+    if (!readOnly && mode === "ytor") {
+      const n = prompt("Namn på rummet/ytan:", "");
+      if (n === null) return;
+      pushUndo();
+      const id = uid("a");
+      setAreas((a) => [...a, { id, x: snap(p.x), y: snap(p.y), name: n.trim() }]);
+      setSel({ kind: "area", id });
       return;
     }
     {
@@ -529,6 +543,21 @@ export default function RoomPlanner({ storageKey, title }) {
     dragRef.current = { kind: "dim", id: dm.id, pre: takeSnap(), moved: false };
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
+  const onDimLabelDown = (e, dm) => {
+    e.stopPropagation();
+    setSel({ kind: "dim", id: dm.id });
+    if (readOnly) return;
+    dragRef.current = { kind: "dimlab", id: dm.id, pre: takeSnap(), moved: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onAreaDown = (e, ar) => {
+    e.stopPropagation();
+    setSel({ kind: "area", id: ar.id });
+    if (readOnly) return;
+    const p = toSvg(e.clientX, e.clientY);
+    dragRef.current = { kind: "area", id: ar.id, dx: p.x - ar.x, dy: p.y - ar.y, pre: takeSnap(), moved: false };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
   const onBgDown = (e) => {
     if (readOnly || mode !== "bakgrund" || !bgT) return;
     e.stopPropagation();
@@ -583,7 +612,7 @@ export default function RoomPlanner({ storageKey, title }) {
     }
     if (d.kind === "meas") {
       d.moved = true;
-      if (mStart) { const s = snapPoint([p.x, p.y]); setMPreview(s.snapped ? s.p : axisLock(mStart, s.p)); }
+      if (mStart) { const s = snapPoint([p.x, p.y]); setMPreview(s.snapped ? s.p : axisLock(mStart, s.p)); mRefs.current.b = s.snapped ? s.ref : null; }
       return;
     }
     d.moved = true;
@@ -612,13 +641,20 @@ export default function RoomPlanner({ storageKey, title }) {
     } else if (d.kind === "label") {
       setItems((a) => a.map((it) => it.id === d.id
         ? { ...it, lx: snap((p.x + d.gx) - (it.x + it.w / 2)), ly: snap((p.y + d.gy) - (it.y + it.h / 2)) } : it));
-    } else if (d.kind === "dim") {
-      setDims((a) => a.map((m) => {
-        if (m.id !== d.id) return m;
-        const dx = m.b[0] - m.a[0], dy = m.b[1] - m.a[1], L = Math.hypot(dx, dy) || 1;
-        const nx = -dy / L, ny = dx / L; // perpendicular unit
-        return { ...m, off: snap((p.x - m.a[0]) * nx + (p.y - m.a[1]) * ny) };
-      }));
+    } else if (d.kind === "dim" || d.kind === "dimlab") {
+      const live = liveDims.find((m) => m.id === d.id);
+      if (!live) return;
+      const g = dimGeom(live), [nx, ny] = g.n, ux = ny, uy = -nx;
+      if (d.kind === "dim") {
+        const off = snap((p.x - g.a[0]) * nx + (p.y - g.a[1]) * ny);
+        setDims((a) => a.map((m) => (m.id === d.id ? { ...m, off } : m)));
+      } else {
+        const mx = (g.a2[0] + g.b2[0]) / 2, my = (g.a2[1] + g.b2[1]) / 2;
+        const lt = snap((p.x - mx) * ux + (p.y - my) * uy);
+        setDims((a) => a.map((m) => (m.id === d.id ? { ...m, lt } : m)));
+      }
+    } else if (d.kind === "area") {
+      setAreas((a) => a.map((r) => (r.id === d.id ? { ...r, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : r)));
     } else if (d.kind === "group") {
       // Move every grouped item together (furniture may cross/exit walls).
       setItems((a) => a.map((it) => {
@@ -655,12 +691,17 @@ export default function RoomPlanner({ storageKey, title }) {
           const up = toSvg(e.clientX, e.clientY);
           const s = snapPoint([up.x, up.y]);
           const p2 = d.moved && mPreview ? mPreview : (mStart ? (s.snapped ? s.p : axisLock(mStart, s.p)) : s.p);
+          if (!(d.moved && mPreview)) mRefs.current.b = s.snapped ? s.ref : null;
           if (mStart) {
             const len = Math.hypot(p2[0] - mStart[0], p2[1] - mStart[1]);
             if (saveMeas && len > 1) {
               pushUndo();
               const id = uid("d");
-              setDims((a) => [...a, { id, a: mStart, b: p2, off: 350 }]);
+              const { a: ra, b: rb } = mRefs.current;
+              // Near-horizontal/vertical measurements stay straight even when their anchors move.
+              const adx = Math.abs(p2[0] - mStart[0]), ady = Math.abs(p2[1] - mStart[1]);
+              const ax = Math.min(adx, ady) / (Math.max(adx, ady) || 1) < 0.22 ? (adx >= ady ? "x" : "y") : undefined;
+              setDims((a) => [...a, { id, a: mStart, b: p2, off: 350, ...(ra ? { ra } : {}), ...(rb ? { rb } : {}), ...(ax ? { ax } : {}) }]);
               setSel({ kind: "dim", id });
             } else {
               setMeasures((ms) => [...ms, [mStart, p2]]);
@@ -711,7 +752,9 @@ export default function RoomPlanner({ storageKey, title }) {
   const selOp = sel?.kind === "op" ? openings.find((o) => o.id === sel.id) : null;
   const selIt = sel?.kind === "it" ? items.find((i) => i.id === sel.id) : null;
   const selCm = sel?.kind === "cm" ? comments.find((c) => c.id === sel.id) : null;
-  const selDim = sel?.kind === "dim" ? dims.find((d) => d.id === sel.id) : null;
+  const selDim = sel?.kind === "dim" ? liveDims.find((d) => d.id === sel.id) : null;
+  const selArea = sel?.kind === "area" ? areas.find((a) => a.id === sel.id) : null;
+  const areaOf = (ar) => areaAt(grid, ar.x, ar.y);
   const commentNumber = (id) => comments.findIndex((c) => c.id === id) + 1;
   const updOp = (fn) => { pushUndo(); setOpenings((a) => a.map((o) => (o.id === sel.id ? fn(o) : o))); };
   const updIt = (fn) => { pushUndo(); setItems((a) => a.map((i) => (i.id === sel.id ? fn(i) : i))); };
@@ -723,6 +766,7 @@ export default function RoomPlanner({ storageKey, title }) {
     if (selIt) setItems((a) => a.filter((i) => i.id !== sel.id));
     if (selCm) { if (selCm.photoPath) deletePhoto(selCm.photoPath); setComments((a) => a.filter((c) => c.id !== sel.id)); }
     if (selDim) setDims((a) => a.filter((d) => d.id !== sel.id));
+    if (selArea) setAreas((a) => a.filter((r) => r.id !== sel.id));
     setSel(null);
   };
   const renameSel = () => {
@@ -977,26 +1021,46 @@ export default function RoomPlanner({ storageKey, title }) {
     return <g key={o.id}>{els}</g>;
   };
 
-  // Saved dimension line: offset parallel line with extension lines, ticks and label.
+  // Saved dimension line: offset parallel line with extension lines from the measured points,
+  // end ticks and an upright label (drag the label in Mät mode to slide it along the line).
   const renderDim = (dm) => {
     const isSel = selDim?.id === dm.id;
     const interactive = !readOnly && mode === "mat";
-    const [ax, ay] = dm.a, [bx, by] = dm.b;
-    const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy) || 1;
-    const ux = dx / L, uy = dy / L, nx = -uy, ny = ux; // along + perpendicular
-    const off = dm.off || 0;
-    const a2 = [ax + nx * off, ay + ny * off], b2 = [bx + nx * off, by + ny * off];
-    const mid = [(a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2];
-    const tick = 90, lab = off >= 0 ? 150 : -60;
+    const g = dimGeom(dm), [nx, ny] = g.n, tick = 90;
+    const ext = (P, Q) => (Math.hypot(Q[0] - P[0], Q[1] - P[1]) > 1
+      ? <line x1={P[0]} y1={P[1]} x2={Q[0]} y2={Q[1]} stroke={blue} strokeWidth="8" strokeDasharray="24 20" style={{ pointerEvents: "none" }} /> : null);
+    const anchored = dm.ra || dm.rb;
     return (
       <g key={dm.id} onPointerDown={interactive ? (e) => onDimDown(e, dm) : undefined} style={{ cursor: interactive ? "grab" : "default" }}>
-        {off !== 0 && <line x1={ax} y1={ay} x2={a2[0]} y2={a2[1]} stroke={blue} strokeWidth="8" strokeDasharray="24 20" style={{ pointerEvents: "none" }} />}
-        {off !== 0 && <line x1={bx} y1={by} x2={b2[0]} y2={b2[1]} stroke={blue} strokeWidth="8" strokeDasharray="24 20" style={{ pointerEvents: "none" }} />}
-        <line x1={a2[0]} y1={a2[1]} x2={b2[0]} y2={b2[1]} stroke={blue} strokeWidth={isSel ? 20 : 12} style={{ pointerEvents: "none" }} />
-        <line x1={a2[0] - nx * tick} y1={a2[1] - ny * tick} x2={a2[0] + nx * tick} y2={a2[1] + ny * tick} stroke={blue} strokeWidth="12" style={{ pointerEvents: "none" }} />
-        <line x1={b2[0] - nx * tick} y1={b2[1] - ny * tick} x2={b2[0] + nx * tick} y2={b2[1] + ny * tick} stroke={blue} strokeWidth="12" style={{ pointerEvents: "none" }} />
-        {interactive && <line x1={a2[0]} y1={a2[1]} x2={b2[0]} y2={b2[1]} stroke={isSel ? "rgba(90,122,140,0.25)" : "transparent"} strokeWidth="260" style={{ pointerEvents: "stroke" }} />}
-        <text x={mid[0] + nx * lab} y={mid[1] + ny * lab} fontFamily={mono} fontSize="130" fill={blue} textAnchor="middle" style={{ pointerEvents: "none" }}>{Math.round(L)}</text>
+        {ext(g.ext[0], g.a2)}
+        {ext(g.ext[1], g.b2)}
+        <line x1={g.a2[0]} y1={g.a2[1]} x2={g.b2[0]} y2={g.b2[1]} stroke={blue} strokeWidth={isSel ? 20 : 12} style={{ pointerEvents: "none" }} />
+        <line x1={g.a2[0] - nx * tick} y1={g.a2[1] - ny * tick} x2={g.a2[0] + nx * tick} y2={g.a2[1] + ny * tick} stroke={blue} strokeWidth="12" style={{ pointerEvents: "none" }} />
+        <line x1={g.b2[0] - nx * tick} y1={g.b2[1] - ny * tick} x2={g.b2[0] + nx * tick} y2={g.b2[1] + ny * tick} stroke={blue} strokeWidth="12" style={{ pointerEvents: "none" }} />
+        {interactive && <line x1={g.a2[0]} y1={g.a2[1]} x2={g.b2[0]} y2={g.b2[1]} stroke={isSel ? "rgba(90,122,140,0.25)" : "transparent"} strokeWidth="260" style={{ pointerEvents: "stroke" }} />}
+        {isSel && anchored && [dm.ra && g.ext[0], dm.rb && g.ext[1]].filter(Boolean).map((P, i) => (
+          <circle key={i} cx={P[0]} cy={P[1]} r="60" fill="none" stroke={blue} strokeWidth="16" style={{ pointerEvents: "none" }} />
+        ))}
+        <text x={g.lab[0]} y={g.lab[1]} fontFamily={mono} fontSize="130" fill={blue} textAnchor="middle" dominantBaseline="central"
+          transform={g.ang ? `rotate(${g.ang} ${g.lab[0]} ${g.lab[1]})` : undefined}
+          onPointerDown={interactive ? (e) => onDimLabelDown(e, dm) : undefined}
+          style={{ pointerEvents: interactive ? "all" : "none", cursor: interactive ? "ew-resize" : "default" }}>{g.L}</text>
+      </g>
+    );
+  };
+
+  // Room label: name + m² of the enclosed region the label sits in (computed from the walls).
+  const renderArea = (ar) => {
+    const isSel = selArea?.id === ar.id;
+    const interactive = !readOnly && mode === "ytor";
+    const m2 = areaOf(ar);
+    return (
+      <g key={ar.id} onPointerDown={interactive ? (e) => onAreaDown(e, ar) : undefined}
+        style={{ cursor: interactive ? "grab" : "default", pointerEvents: interactive ? "all" : "none" }}>
+        {isSel && <rect x={ar.x - 700} y={ar.y - 300} width="1400" height="560" rx="60" fill="rgba(90,122,140,0.15)" stroke={blue} strokeWidth="12" strokeDasharray="30 24" />}
+        {interactive && !isSel && <rect x={ar.x - 600} y={ar.y - 260} width="1200" height="480" fill="transparent" />}
+        {ar.name && <text x={ar.x} y={ar.y - 20} textAnchor="middle" fontSize="170" letterSpacing="20" fill={ink} opacity="0.8">{ar.name}</text>}
+        <text x={ar.x} y={ar.y + 170} textAnchor="middle" fontSize="150" fontFamily={mono} fill={m2 == null ? red : ink} opacity="0.8">{fmtM2(m2)}</text>
       </g>
     );
   };
@@ -1045,6 +1109,7 @@ export default function RoomPlanner({ storageKey, title }) {
         {modeBtn("inredning", "3 · Inredning")}
         {modeBtn("vaggar", "✏️ Väggar")}
         {modeBtn("mat", "📏 Mät")}
+        {modeBtn("ytor", "▦ Ytor m²")}
         {modeBtn("kommentar", "💬 Kommentar")}
         {modeBtn("bakgrund", "🖼 Bakgrund")}
       </div>
@@ -1092,6 +1157,13 @@ export default function RoomPlanner({ storageKey, title }) {
         </div>
       )}
 
+      {!readOnly && !full && mode === "ytor" && (
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>{areas.length} ytor · summa <b style={{ fontFamily: mono }}>{fmtM2(areas.reduce((t, a) => t + (areaOf(a) || 0), 0))}</b></span>
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>Tryck i ett rum för att sätta namn + m² (räknas från väggarna, dörrar räknas som stängda) · dra etiketten för att flytta · öppna planlösningar delas med en rumsgräns under ✏️ Väggar</span>
+        </div>
+      )}
+
       {!readOnly && !full && mode === "vaggar" && (
         <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
           <button style={wallW === WALL_OUTER ? { ...btnOn, background: blue, borderColor: blue } : btn}
@@ -1112,6 +1184,9 @@ export default function RoomPlanner({ storageKey, title }) {
             ? <button style={{ ...btnOn, background: blue, borderColor: blue }} onClick={() => { setDrawingWall(false); setWalls((ws) => ws.filter((w) => w.pts.length > 1)); }}>✓ Klar</button>
             : <button style={btn} onClick={newWallLine}>+ Ny vägg</button>}
           {drawingWall && activeWall && <button style={btn} onClick={undoWallPoint}>Ångra punkt</button>}
+          {activeWall && !drawingWall && <button style={selWall?.sep ? { ...btnOn, background: blue, borderColor: blue } : btn}
+            onClick={() => { pushUndo(); setWalls((ws) => ws.map((w) => (w.id === activeWall ? { ...w, sep: w.sep ? undefined : true } : w))); setOpenings((a) => a.filter((o) => o.wallId !== activeWall || selWall?.sep)); }}>
+            {selWall?.sep ? "✓ Rumsgräns" : "Rumsgräns"}</button>}
           {activeWall && !drawingWall && <button style={{ ...btn, color: red, borderColor: red }} onClick={removeActiveWall}>Ta bort vägg</button>}
           <button style={snapOn ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setSnapOn((s) => !s)}>{snapOn ? "✓ Fäst mot objekt" : "Fäst mot objekt"}</button>
           <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
@@ -1245,6 +1320,7 @@ export default function RoomPlanner({ storageKey, title }) {
           {/* freeform drawn walls — sharp (butt) ends, corners filled, openings cut out */}
           {walls.flatMap((w) => {
             if (!w.pts || w.pts.length < 2) return [];
+            if (w.sep) return [<polyline key={w.id} points={w.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={ink} strokeWidth="14" strokeDasharray="60 45" opacity="0.6" style={{ pointerEvents: "none" }} />];
             const T = w.w ?? WALL;
             const out = [];
             for (let i = 0; i < w.pts.length - 1; i++) {
@@ -1311,7 +1387,10 @@ export default function RoomPlanner({ storageKey, title }) {
           )}
 
           {/* saved dimension lines (part of the drawing) */}
-          {dims.map(renderDim)}
+          {liveDims.map(renderDim)}
+
+          {/* room labels with m² */}
+          {areas.map(renderArea)}
 
           {/* ruler measurements (multiple) + live one */}
           {(measures.length > 0 || mStart) && (
@@ -1472,7 +1551,7 @@ export default function RoomPlanner({ storageKey, title }) {
         </svg>
 
         {/* selection controls — absolute overlay so selecting never reflows/rescales the canvas */}
-        {!readOnly && (selOp || selIt || selCm || selDim) && (
+        {!readOnly && (selOp || selIt || selCm || selDim || selArea) && (
           <div style={{ position: "absolute", left: 8, right: 8, bottom: 8, background: "#fff", border: `1.5px solid ${ink}`, borderRadius: 10, padding: "8px 12px", paddingBottom: "calc(8px + env(safe-area-inset-bottom))", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", zIndex: 3 }}>
           {selOp && (
             <>
@@ -1512,8 +1591,16 @@ export default function RoomPlanner({ storageKey, title }) {
           )}
           {selDim && (
             <>
-              <div style={{ fontWeight: 600 }}>📐 Mått <span style={{ fontFamily: mono, color: blue, fontSize: 13 }}>{Math.round(Math.hypot(selDim.b[0] - selDim.a[0], selDim.b[1] - selDim.a[1]))} mm</span></div>
+              <div style={{ fontWeight: 600 }}>📐 Mått <span style={{ fontFamily: mono, color: blue, fontSize: 13 }}>{dimGeom(selDim).L} mm</span>
+                <span style={{ fontSize: 11, color: "#7A756E", fontWeight: 400 }}>{selDim.ra || selDim.rb ? " · fäst i ritningen" : " · fritt"}</span></div>
               <button style={btn} onClick={() => updDim((d) => ({ ...d, off: -(d.off || 0) }))}>⇄ Byt sida</button>
+              <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
+            </>
+          )}
+          {selArea && (
+            <>
+              <div style={{ fontWeight: 600 }}>▦ {selArea.name || "Yta"} <span style={{ fontFamily: mono, color: blue, fontSize: 13 }}>{fmtM2(areaOf(selArea))}</span></div>
+              <button style={btn} onClick={() => { const n = prompt("Namn:", selArea.name); if (n !== null) { pushUndo(); setAreas((a) => a.map((r) => (r.id === selArea.id ? { ...r, name: n.trim() } : r))); } }}>✎ Namn</button>
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
             </>
           )}

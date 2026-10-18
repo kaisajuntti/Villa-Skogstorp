@@ -563,7 +563,7 @@ async function roomData(room) {
   const { plan, bgImg, space } = await loadPlanForPrint(room.id);
   const svgString = buildPlanSvg({
     room: plan.room || { w: 4000, l: 3000 }, openings: plan.openings || [], items: plan.items || [],
-    walls: plan.walls || [], comments: plan.comments || [], dims: plan.dims || [], embedBg: false,
+    walls: plan.walls || [], comments: plan.comments || [], dims: plan.dims || [], areas: plan.areas || [], embedBg: false,
   });
   return {
     roomName: short(room.name), svgString, comments: plan.comments || [], bgImg, bgT: plan.bg || null,

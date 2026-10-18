@@ -210,6 +210,27 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   owner's room interiors): one wall per line, butt ends on the perpendicular wall's face, L-corners overlapping. Openings
   are re-attached by absolute position (reversed wall → flip/out toggled); spec `kinds` fixes mis-traced types and
   `extra` adds missing ones (allrum S window). Re-running whole_merge needs a re-run of whole_clean after it.
+  **Exact vs the architect (2026-10-18):** the bygglov PDF is vector — every wall is grey filled layer rectangles
+  (e.g. ytterväggen 21+25+220+22 = 288 mm) whose clip paths cut out windows/doors. `arch_layers.py` extracts them
+  (plan mm), `arch_diff.py` diffs our walls against them at 5 mm. `whole_clean_plan2.json` now holds the
+  architect's exact faces/openings (±1 mm rounding), keeping the owner's design (walk-ins removed, master v2 inner
+  walls; murstock not drawn – it is demolished). Scale verified: scale bar 35.281 mm/pt vs K 35.278; the drawing's
+  own 4180/11198 = 4178/11197 mm (11198 ends mid-wall at y 11394, not at a face – facade-to-facade is 11 303).
+  Wall faces that moved (master: N −28, E −42, S −72, W −55/+51 mm) carry flush furniture along (`faces`).
+  `whole_dims.py` + `whole_dims_plan2.json` = exterior chains (window edges, totals), clear room dims on the faces,
+  room boundaries (`sep` walls) and room labels; every dim is anchored. Architect's text 4.5 m² for WC/D does not
+  match their own walls (2404 × 2425 = 5.83 m²).
+- **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
+  - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
+    geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a
+    near-horizontal/vertical dim straight, `lt` slides the label (drag the number in Mät), `ls:-1` = label on the
+    other side. Snapping: corners/edges/opening edges/object points, else the nearest **wall face** (`wp`); a face
+    clearly closer than any point wins. Labels are rotated with the line (never upside down). The view box includes
+    the dims.
+  - **Ytor m²** mode: `areas:[{id,x,y,name}]` in the plan; m² = enclosed region around the label, computed exactly
+    from the wall faces (`areaGrid`/`areaAt`, grid lines at every face, doors count as closed; "– m²" = open).
+    Open plans are split with a **Rumsgräns** (wall with `sep:true`: dashed, no openings, only splits areas;
+    toggle on a selected wall in ✏️ Väggar).
 
 ### Inspirationsbilder (2026-10-04)
 - Space field **`inspo: [{id, title, photo, path, note}]`** (AI renders / moodboards of the finished room). `InspoGallery`

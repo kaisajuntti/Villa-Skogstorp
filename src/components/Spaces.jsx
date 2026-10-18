@@ -147,7 +147,7 @@ export function RoomsCommentBrowser({ cover, colors }) {
     const { plan, bgImg, space } = await loadPlanForPrint(room.id);
     const svgString = buildPlanSvg({
       room: plan.room, openings: plan.openings || [], items: plan.items || [],
-      walls: plan.walls || [], comments: plan.comments || [], dims: plan.dims || [], embedBg: false,
+      walls: plan.walls || [], comments: plan.comments || [], dims: plan.dims || [], areas: plan.areas || [], embedBg: false,
     });
     return {
       roomName: room.name, svgString, comments: plan.comments || [], bgImg, bgT: plan.bg || null,

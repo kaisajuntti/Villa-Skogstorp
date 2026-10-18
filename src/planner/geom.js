@@ -185,7 +185,7 @@ export function wallBands(room, walls) {
 export function areaGrid(room, walls) {
   const bands = wallBands(room, walls).map((b) => {
     const dx = b.B[0] - b.A[0], dy = b.B[1] - b.A[1], L = Math.hypot(dx, dy);
-    return { ...b, ux: dx / L, uy: dy / L, L };
+    return { ...b, ux: dx / L, uy: dy / L, L, diag: Math.abs(dx) > 1e-9 && Math.abs(dy) > 1e-9 };
   });
   if (!bands.length) return null;
   const xs = new Set(), ys = new Set();
@@ -209,10 +209,14 @@ export function areaGrid(room, walls) {
     const cy = (Y[j] + Y[j + 1]) / 2;
     for (let i = 0; i < nx; i++) {
       const cx = (X[i] + X[i + 1]) / 2;
+      const r = Math.hypot(X[i + 1] - X[i], Y[j + 1] - Y[j]) / 2;
       for (const b of bands) {
         const rx = cx - b.A[0], ry = cy - b.A[1];
         const t = rx * b.ux + ry * b.uy, d = -rx * b.uy + ry * b.ux;
-        if (t > 0 && t < b.L && Math.abs(d) < b.T / 2) { blocked[j * nx + i] = 1; break; }
+        // 1 mm tolerance: walls that meet at half-millimetre faces leave no hairline gap for the fill;
+        // a diagonal wall blocks every cell it touches (a thin one could slip between cell centres)
+        const e = b.diag ? r : 1;
+        if (t > -e && t < b.L + e && Math.abs(d) < b.T / 2 + e) { blocked[j * nx + i] = 1; break; }
       }
     }
   }

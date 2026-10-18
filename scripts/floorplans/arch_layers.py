@@ -1,7 +1,7 @@
 """Exact architect walls from the bygglov PDF (vector): every wall layer is a grey filled rectangle whose
 clip path cuts out the windows/doors. Prints/saves each layer with its solid intervals, in plan mm.
 
-  python3 arch_layers.py bygglov.pdf PAGE X0 Y0 out.json
+  python3 arch_layers.py bygglov.pdf PAGE X0 Y0 out.json [GREY,...]   (wall fill grey: page 4 0.4196, page 3 0.286, page 2 0.38/0.349)
   X0/Y0 = page-mm of the plan's origin (u-p2-hela: X0 = 84*K - bg.x, Y0 = 42*K - bg.y)
 Scale check (plan 2): scale bar 5 m = 141.72 pt -> 35.281 mm/pt (K = 35.278, A3 1:100); the
 architect's own dims 4180 / 11198 measure 4178 / 11197 mm.
@@ -10,6 +10,7 @@ import pymupdf, json, sys
 import numpy as np
 d=pymupdf.open(sys.argv[1]); p=d[int(sys.argv[2])]
 K=35.278; X0=float(sys.argv[3]); Y0=float(sys.argv[4])
+GREYS=[float(v) for v in (sys.argv[6] if len(sys.argv)>6 else '0.4196').split(',')]
 dr=p.get_drawings(extended=True)
 def polys(items):
     # clip items are line segments forming one or more closed loops
@@ -28,7 +29,7 @@ out=[]
 clip=None
 for g in dr:
     if g['type']=='clip' and g.get('level')==0: clip=g
-    if g['type']=='f' and str(g['fill']).startswith('(0.4196'):
+    if g['type']=='f' and g.get('fill') and any(abs(g['fill'][0]-v)<0.002 and abs(g['fill'][1]-v)<0.002 for v in GREYS):
         loops=polys(clip['items']) if clip else []
         edges=[(a,b) for L in loops for a,b in zip(L,L[1:]+L[:1])]
         def contains(pts):

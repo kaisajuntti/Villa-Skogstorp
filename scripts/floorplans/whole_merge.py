@@ -4,12 +4,20 @@ S=sys.argv[1]; FL=sys.argv[2]; NEW=sys.argv[3]; NAME=sys.argv[4]
 K=35.278; CROP={'kallare':(84,170),'plan1':(84,42),'plan2':(84,42)}
 OR=json.load(open(f'{S}/whole/origins_{FL}.json'))
 WALL=200
-segs=[]; items=[]; dims=[]; comments=[]
+stamp={}; segs=[]; items=[]; dims=[]; comments=[]
 def add_seg(rid,a,b,w,ops,tag):
     segs.append(dict(id=f'{tag}',a=a,b=b,w=w,ops=ops,rid=rid))
 for rid,o in OR.items():
-    p=vsapi.get(rid,kind='plan')['data']; ox,oy=o['origin']
-    T=lambda q:(q[0]+ox,q[1]+oy)
+    row=vsapi.get(rid,kind='plan'); p=row['data']; ox,oy=o['origin']; stamp[rid]=row['updated_at']
+    # A room drawn on a background shown rotated 180° (bg.rot) is itself rotated 180° against the page:
+    # turn it about the background's centre first (whole_match matches the stored, upright image).
+    R=lambda q:(q[0],q[1])
+    if (p.get('bg') or {}).get('rot')==180:
+        bgi=vsapi.get(rid,kind='bg')['data']; B=p['bg']
+        cx,cy=B['x']+B['wmm']/2, B['y']+B['wmm']*bgi['h']/bgi['w']/2
+        R=lambda q:(2*cx-q[0],2*cy-q[1])
+    elif (p.get('bg') or {}).get('rot'): sys.exit(f"{rid}: bg rot {p['bg']['rot']} not supported")
+    T=lambda q:(R(q)[0]+ox,R(q)[1]+oy)
     room=p.get('room',{}); rw,rl=room.get('w',0),room.get('l',0)
     ops=p.get('openings',[])
     # room rectangle walls -> freeform segments (centre line 100 outside the interior)
@@ -33,17 +41,33 @@ for rid,o in OR.items():
             so=[dict(op) for op in ops if op.get('wallId')==w['id'] and op.get('seg')==i]
             add_seg(rid,T(pts[i]),T(pts[i+1]),w.get('w',WALL),so,f"{rid}-{w['id']}-{i}")
     for it in p.get('items',[]):
-        q=dict(it); q['id']=rid+'-'+str(it['id']); q['x']=it['x']+ox; q['y']=it['y']+oy; items.append(q)
+        q=dict(it); q['id']=rid+'-'+str(it['id'])
+        c0=T((it['x'],it['y'])); c1=T((it['x']+it['w'],it['y']+it['h']))
+        q['x']=round(min(c0[0],c1[0])); q['y']=round(min(c0[1],c1[1]))
+        if R((0,0))!=(0,0):  # rotated: the label offset turns too
+            for k in ('lx','ly'):
+                if q.get(k): q[k]=-q[k]
+        items.append(q)
     for dm in p.get('dims',[]):
         q=dict(dm); q['id']=rid+'-'+str(dm['id']); q['a']=list(T(dm['a'])); q['b']=list(T(dm['b'])); dims.append(q)
     for c in p.get('comments',[]):
         q=dict(c); q['id']=rid+'-'+str(c['id'])
         for kx,ky in (('x','y'),('tx','ty')):
-            if kx in q: q[kx]+=ox; q[ky]+=oy
+            if kx in q: q[kx],q[ky]=T((q[kx],q[ky]))
+        if R((0,0))!=(0,0) and 'dir' in q: q['dir']=(q['dir']+180)%360
         comments.append(q)
 def geom(s):
     dx,dy=s['b'][0]-s['a'][0],s['b'][1]-s['a'][1]; L=math.hypot(dx,dy) or 1; return (dx/L,dy/L),L
 # absolute openings
+# every source opening with absolute edges (the cutting below can lose openings that two rooms traced
+# slightly differently; whole_autospec.py rebuilds the openings from this list)
+srcops=[]
+for s in segs:
+    (ux,uy),L=geom(s)
+    for op in s['ops']:
+        P=lambda d:[s['a'][0]+ux*d,s['a'][1]+uy*d]
+        srcops.append(dict(rid=s['rid'],stamp=stamp[s['rid']],id=op.get('id'),kind=op.get('kind'),flip=op.get('flip',False),out=op.get('out'),
+                           p0=P(op['pos']),p1=P(op['pos']+op['len']),w=s['w']))
 allops=[]
 for s in segs:
     (ux,uy),L=geom(s)
@@ -110,4 +134,5 @@ cx,cy=CROP[FL]
 bg=dict(x=round(cx*K-X0),y=round(cy*K-Y0),wmm=round(fimg['w']*0.48*K),opacity=0.3,visible=True,rot=0)
 plan=dict(room=dict(w=round(X1-X0),l=round(Y1-Y0),frame=False),walls=walls,openings=openings,items=items,dims=dims,comments=comments,bg=bg)
 print('walls',len(walls),'openings',len(openings),'items',len(items),'dims',len(dims),'room',plan['room'],'bg',bg)
-json.dump(dict(plan=plan,bgimg=fimg,id=NEW,name=NAME),open(f'{S}/whole/{NEW}.json','w'))
+for o in srcops: o['p0']=sh(o['p0']); o['p1']=sh(o['p1'])
+json.dump(dict(plan=plan,bgimg=fimg,id=NEW,name=NAME,srcops=srcops),open(f'{S}/whole/{NEW}.json','w'))

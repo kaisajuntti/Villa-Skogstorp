@@ -1,0 +1,218 @@
+{
+ "_note": "Hand-checked overrides on top of whole_autospec.py for plan 1 (bygglov page 3). Diagonal gästrum wall + door from the clip path of the rotated wall fill; murstock block removed (demolished, the owner's kamin stands there); openings the earlier tracing missed. Tvätt bay: full north wall with the exterior door to the stair. Tvätt: full east wall with its door to the passage (the layer's clip path does not cut it; read off the drawing). Tvätt and its bay are one room: the wall between them is two pieces with a real gap (no door).",
+ "remove_walls": [
+  "a25",
+  "a35",
+  "a15"
+ ],
+ "walls": [
+  {
+   "id": "w6",
+   "a": [
+    5036,
+    4299
+   ],
+   "b": [
+    6356,
+    3511
+   ],
+   "w": 94
+  },
+  {
+   "id": "a30",
+   "a": [
+    270,
+    4701
+   ],
+   "b": [
+    2420,
+    4701
+   ],
+   "w": 292
+  },
+  {
+   "id": "a26",
+   "a": [
+    5013,
+    4233
+   ],
+   "b": [
+    5013,
+    6515
+   ],
+   "w": 97
+  },
+  {
+   "id": "a15n",
+   "a": [
+    2566,
+    296
+   ],
+   "b": [
+    2566,
+    5287
+   ],
+   "w": 292
+  },
+  {
+   "id": "a15s",
+   "a": [
+    2566,
+    7167
+   ],
+   "b": [
+    2566,
+    11599
+   ],
+   "w": 292
+  }
+ ],
+ "set": {
+  "w6-o5x": [
+   [
+    5275,
+    4157
+   ],
+   [
+    5972,
+    3740
+   ]
+  ]
+ },
+ "kinds": {
+  "a33-o3": "dorr"
+ },
+ "props": {
+  "a33-o3": {
+   "flip": false,
+   "out": false
+  }
+ },
+ "extra": [
+  {
+   "id": "a1-fx1",
+   "wallId": "a1",
+   "kind": "fonster",
+   "from": [
+    9298,
+    7402
+   ],
+   "to": [
+    10452,
+    7402
+   ]
+  },
+  {
+   "id": "a6-fx1",
+   "wallId": "a6",
+   "kind": "fonster",
+   "from": [
+    14721,
+    4851
+   ],
+   "to": [
+    15875,
+    4851
+   ]
+  },
+  {
+   "id": "a21-dx1",
+   "wallId": "a21",
+   "kind": "dorr",
+   "from": [
+    15935,
+    5736
+   ],
+   "to": [
+    15935,
+    6546
+   ],
+   "flip": true,
+   "out": false
+  },
+  {
+   "id": "a28-ox1",
+   "wallId": "a28",
+   "kind": "oppning",
+   "from": [
+    6396,
+    10303
+   ],
+   "to": [
+    6396,
+    11215
+   ]
+  },
+  {
+   "id": "a30-dx1",
+   "wallId": "a30",
+   "kind": "dorr",
+   "from": [
+    1297,
+    4701
+   ],
+   "to": [
+    2210,
+    4701
+   ],
+   "flip": true,
+   "out": true
+  },
+  {
+   "id": "a26-dx1",
+   "wallId": "a26",
+   "kind": "dorr",
+   "from": [
+    5013,
+    5394
+   ],
+   "to": [
+    5013,
+    6312
+   ],
+   "flip": true,
+   "out": true
+  },
+  {
+   "id": "a8-px1",
+   "wallId": "a8",
+   "kind": "pardorr",
+   "from": [
+    11703,
+    7402
+   ],
+   "to": [
+    12953,
+    7402
+   ],
+   "flip": false,
+   "out": false
+  },
+  {
+   "id": "a15n-w4-o1",
+   "wallId": "a15n",
+   "kind": "fonster",
+   "from": [
+    2566,
+    1831
+   ],
+   "to": [
+    2566,
+    2985
+   ]
+  },
+  {
+   "id": "a15s-fx1",
+   "wallId": "a15s",
+   "kind": "fonster",
+   "from": [
+    2566,
+    8995
+   ],
+   "to": [
+    2566,
+    10143
+   ]
+  }
+ ]
+}

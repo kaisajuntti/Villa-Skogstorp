@@ -1,0 +1,77 @@
+{
+ "_note": "Hand-checked overrides on top of whole_autospec.py --all for the källare (bygglov page 2). Bastu glass front: the diagonal piece from the clip path of the rotated fill. Förråd door + KPR opening the tracing missed. 'NY VALVÖPPNING' drawn as a plain opening (no vault – the old wall becomes an Exakt wall – but the only way into vinkällare/install once the old stair is demolished; to confirm with the owner). Removed: skorsten foundation block in the vinkällare wall (decided: no fundament, prefab lättskorsten) and a stray piece outside the house. Bastu glass front drawn up to the wall face (no 72 mm slot).",
+ "remove_walls": [
+  "a23",
+  "a28",
+  "a29"
+ ],
+ "walls": [
+  {
+   "id": "a23d",
+   "a": [
+    4012,
+    5345
+   ],
+   "b": [
+    4639,
+    5655
+   ],
+   "w": 20
+  },
+  {
+   "id": "a22",
+   "a": [
+    2829,
+    5349
+   ],
+   "b": [
+    4018,
+    5349
+   ],
+   "w": 17
+  }
+ ],
+ "extra": [
+  {
+   "id": "a26-dx1",
+   "wallId": "a26",
+   "kind": "dorr",
+   "from": [
+    5249,
+    3493
+   ],
+   "to": [
+    6259,
+    3493
+   ],
+   "flip": true,
+   "out": true
+  },
+  {
+   "id": "a27-ox1",
+   "wallId": "a27",
+   "kind": "oppning",
+   "from": [
+    5271,
+    5279
+   ],
+   "to": [
+    6093,
+    5279
+   ]
+  },
+  {
+   "id": "a6-ox1",
+   "wallId": "a6",
+   "kind": "oppning",
+   "from": [
+    9845,
+    7626
+   ],
+   "to": [
+    10721,
+    7626
+   ]
+  }
+ ]
+}

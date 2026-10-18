@@ -3,15 +3,16 @@ sys.path.insert(0,'/home/user/Villa-Skogstorp/scripts'); import vsapi
 import numpy as np, pymupdf
 from PIL import Image
 from scipy.signal import fftconvolve
-S=sys.argv[1]
+# python3 whole_match.py SCRATCH PAGE OUT.json roomId...   (bygglov pages: 1 källare, 2 plan 1, 3 plan 2)
+S=sys.argv[1]; PAGE=int(sys.argv[2]); OUT=sys.argv[3]; ROOMS=sys.argv[4:]
 K=35.278  # mm per pt
-doc=pymupdf.open(S+'/bygglov.pdf'); page=doc[3]
+doc=pymupdf.open(S+'/bygglov.pdf'); page=doc[PAGE]
 res={}
-for rid in ['u-p2-sovrum-wc','u-p2-allrum','u-p2-master','u-p2-balkong']:
+for rid in ROOMS:
     plan=vsapi.get(rid,kind='plan')['data']; bg=vsapi.get(rid,kind='bg')['data']; T=plan['bg']
     im=Image.open(io.BytesIO(base64.b64decode(bg['dataUrl'].split(',',1)[1]))).convert('L')
     pxmm=im.width/T['wmm']            # bg px per mm
-    if T.get('rot'): im=im.rotate(-T['rot'],expand=True)
+    # the stored image is an upright crop of the page; bg.rot only turns it on screen (see whole_merge)
     dpi=pxmm*K*72
     z=pxmm*K; pix=page.get_pixmap(matrix=pymupdf.Matrix(z,z), colorspace=pymupdf.csGRAY)
     P=np.frombuffer(pix.samples,dtype=np.uint8).reshape(pix.h,pix.w).astype(float)
@@ -36,4 +37,4 @@ for rid in ['u-p2-sovrum-wc','u-p2-allrum','u-p2-master','u-p2-balkong']:
     bx,by=xx/pxmm, yy/pxmm
     res[rid]=dict(origin=[bx-T['x'], by-T['y']], rot=T.get('rot',0), pxmm=pxmm)
     print(rid, 'origin page-mm', [round(v) for v in res[rid]['origin']], 'rot',T.get('rot',0))
-json.dump(res,open(S+'/whole/origins_p2.json','w'))
+json.dump(res,open(OUT,'w'))

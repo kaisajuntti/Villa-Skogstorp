@@ -220,6 +220,21 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   `whole_dims.py` + `whole_dims_plan2.json` = exterior chains (window edges, totals), clear room dims on the faces,
   room boundaries (`sep` walls) and room labels; every dim is anchored. Architect's text 4.5 m² for WC/D does not
   match their own walls (2404 × 2425 = 5.83 m²).
+- **Källare + Plan 1 whole floors (2026-10-18)**: utrymmen **`u-k-hela`** / **`u-p1-hela`** ("K/P1 · Hela planet
+  (sammanställning)"), same idea as P2 but generated: `whole_match.py SCRATCH PAGE out.json rooms…` (bygglov pages: 1 källare,
+  2 plan 1, 3 plan 2) → `whole_merge.py` (now also rotates utrymmen drawn on a **bg shown at rot 180** – the kitchen –
+  about the bg centre, and writes `srcops` = every utrymme's openings with absolute edges) → `arch_layers.py … GREY`
+  (wall grey differs per page: 0.38/0.349 källare, 0.286 plan 1, 0.4196 plan 2) → **`whole_autospec.py`** (groups layers into
+  architect walls, merges thin linings into their wall piecewise, keeps/trims/drops them against the owner's walls,
+  rebuilds openings from `srcops` – newest utrymme wins – snapped to architect gaps, writes item `faces`; `--all` =
+  every architect wall, used for the källare which the owner never redrew) → `whole_clean.py merged spec out
+  whole_fix_<floor>.json` (hand-checked overrides: diagonal walls from clip paths, missed doors/windows, removed
+  murstock/fundament) → **`whole_autodims.py`** (exterior chains per facade plane from a flood fill of the outside,
+  clear room dims by rays from each label; labels/room boundaries from `whole_rooms_<floor>.json`) → `whole_dims.py`.
+  `whole_clean` closes hairline gaps (wall ends ≤ 8 mm from another wall are extended) and grows the plan frame.
+  Decisions taken while drawing (to confirm with the owner): källare "NY VALVÖPPNING" drawn as a plain opening (the only
+  way into vinkällare/install once the old stair goes); murstock on P1 and the skorsten foundation in the källare
+  removed; tvätt + its bay are one room; P1 doors/windows the old tracing missed were added from the drawing.
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
     geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a
@@ -228,7 +243,8 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
     clearly closer than any point wins. Labels are rotated with the line (never upside down). The view box includes
     the dims.
   - **Ytor m²** mode: `areas:[{id,x,y,name}]` in the plan; m² = enclosed region around the label, computed exactly
-    from the wall faces (`areaGrid`/`areaAt`, grid lines at every face, doors count as closed; "– m²" = open).
+    from the wall faces (`areaGrid`/`areaAt`, grid lines at every face, doors count as closed; "– m²" = open;
+    1 mm tolerance against half-millimetre slits, diagonal walls block every cell they touch).
     Open plans are split with a **Rumsgräns** (wall with `sep:true`: dashed, no openings, only splits areas;
     toggle on a selected wall in ✏️ Väggar).
 

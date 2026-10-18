@@ -205,6 +205,11 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   walls/openings/items/dims, turns rectangle room walls into freeform segments (S/W reversed + flip toggled), dedupes
   openings, cuts walls that cross another room's opening and drops duplicate segments. It is a **snapshot** – later edits in
   the individual utrymmen do not flow into it (re-run the scripts).
+  **Cleaned 2026-10-18** with `whole_clean.py merged.json whole_clean_plan2.json out.json`: the 42 merged segments are
+  replaced by a hand-checked list of 22 walls (`whole_clean_plan2.json`, faces read off the bygglov drawing / the
+  owner's room interiors): one wall per line, butt ends on the perpendicular wall's face, L-corners overlapping. Openings
+  are re-attached by absolute position (reversed wall → flip/out toggled); spec `kinds` fixes mis-traced types and
+  `extra` adds missing ones (allrum S window). Re-running whole_merge needs a re-run of whole_clean after it.
 
 ### Inspirationsbilder (2026-10-04)
 - Space field **`inspo: [{id, title, photo, path, note}]`** (AI renders / moodboards of the finished room). `InspoGallery`

@@ -199,6 +199,13 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   ({dataUrl,w,h}, 150 dpi crops of the bygglov PDF). Labels = utrymme name without the "K ·/P1 ·/P2 ·" prefix (live
   from `rooms`). Areas whose room is deleted are hidden. Polygon editing in-app = not built yet (edit via script).
 
+- **Hela planet (2026-10-18, test on Plan 2)**: utrymme **`u-p2-hela`** "P2 · Hela planet (sammanställning)" = all P2 utrymmen
+  merged into one plan on the full floor image (bg = `floor-plan2` copied to `bg:u-p2-hela`). `scripts/floorplans/whole_match.py`
+  finds each utrymme's page-mm origin by template-matching its bg crop against the bygglov page; `whole_merge.py` translates
+  walls/openings/items/dims, turns rectangle room walls into freeform segments (S/W reversed + flip toggled), dedupes
+  openings, cuts walls that cross another room's opening and drops duplicate segments. It is a **snapshot** – later edits in
+  the individual utrymmen do not flow into it (re-run the scripts).
+
 ### Inspirationsbilder (2026-10-04)
 - Space field **`inspo: [{id, title, photo, path, note}]`** (AI renders / moodboards of the finished room). `InspoGallery`
   (Spaces.jsx) = own section at the top of Dokument (upload ✨, big images, title/note, ↑/↓, Ta bort); `InspoLightbox`

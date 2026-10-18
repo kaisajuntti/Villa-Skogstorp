@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { storage } from "../storage.js";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
+import { useSpace } from "../state.js";
+import { VENT_SYS, VENT_KINDS, VENT_TOPIC, ventSvg, ventPinsFor, ventQuestions, ventHit, ventColor, hasVent, LINE_W } from "./vent.js";
 import { buildPlanSvg, itemLabel, coveredItemIds, stairLines } from "./planSvg.js";
 import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, AREA_KINDS, fmtM2, regionAt, regionRects } from "./geom.js";
 
@@ -158,6 +160,15 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   const [saveMeas, setSaveMeas] = useState(false); // when on, a completed measurement is saved as a dim
   const [areas, setAreas] = useState([]);       // room labels {id,x,y,name}; m² computed from the walls
   const mRefs = useRef({ a: null, b: null });   // anchors of the in-progress measurement's ends
+  // ventilation layer (see vent.js) + the project's ventilation questions pinned on this plan
+  const [ventLines, setVentLines] = useState([]);
+  const [ventPts, setVentPts] = useState([]);
+  const [showVent, setShowVent] = useState(() => { try { return localStorage.getItem("vs:v1:ui:vent") !== "0"; } catch { return true; } });
+  const [ventSys, setVentSys] = useState("F");
+  const [ventTool, setVentTool] = useState("valj"); // valj | kanal | pil | don | flakt | stam | aggregat | fraga
+  const [ventDraft, setVentDraft] = useState(null); // in-progress duct/arrow: { sys, pts, arrow }
+  const [project, updateProject] = useSpace("project");
+  const planId = storageKey.replace(/^.*plan:/, "");
   const [snapOn, setSnapOn] = useState(true);   // snap points to object/room/wall corners
   const [comments, setComments] = useState([]); // {id, x, y, tx, ty, text, photo?, photoPath?}
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -189,6 +200,8 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     comments: comments.map((c) => ({ ...c })),
     dims: dims.map((d) => ({ ...d, a: [...d.a], b: [...d.b] })),
     areas: areas.map((a) => ({ ...a })),
+    ventLines: ventLines.map((l) => ({ ...l, pts: l.pts.map((q) => [...q]) })),
+    ventPts: ventPts.map((v) => ({ ...v })),
     bg: bgT ? { ...bgT } : null,
   });
   const pushUndo = () => {
@@ -203,6 +216,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     setComments(s.comments || []);
     setDims(s.dims || []);
     setAreas(s.areas || []);
+    setVentLines(s.ventLines || []); setVentPts(s.ventPts || []);
     if (s.bg !== undefined) setBgT(s.bg);
     setSel(null); setGroup([]); setUndoN(undoRef.current.length);
   };
@@ -216,6 +230,8 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     setComments(Array.isArray(s.comments) ? s.comments : []);
     setDims(Array.isArray(s.dims) ? s.dims : []);
     setAreas(Array.isArray(s.areas) ? s.areas : []);
+    setVentLines(Array.isArray(s.ventLines) ? s.ventLines : []);
+    setVentPts(Array.isArray(s.ventPts) ? s.ventPts : []);
     setBgT(s.bg || null);
   }, []);
   useEffect(() => {
@@ -260,12 +276,12 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       try {
         // Dimension ends are stored resolved (anchors applied), so readers without the anchor logic stay right.
         const sd = resolveDims(dims, { room, walls, items, openings });
-        await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(sd.length ? { dims: sd } : {}), ...(areas.length ? { areas } : {}), ...(bgT ? { bg: bgT } : {}) }));
+        await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(sd.length ? { dims: sd } : {}), ...(areas.length ? { areas } : {}), ...(ventLines.length ? { ventLines } : {}), ...(ventPts.length ? { ventPts } : {}), ...(bgT ? { bg: bgT } : {}) }));
         setStatus("Sparat");
       } catch (e) { setStatus("Kunde inte spara"); }
     }, 800);
     return () => clearTimeout(t);
-  }, [room, openings, items, walls, comments, dims, areas, bgT, storageKey]);
+  }, [room, openings, items, walls, comments, dims, areas, ventLines, ventPts, bgT, storageKey]);
 
   // ---------- viewbox (zoom/pan aware) ----------
   const M = 480;
@@ -391,8 +407,78 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   };
 
   // ---------- pointer handlers ----------
+  // ---------- ventilation layer ----------
+  const ventPins = useMemo(() => ventPinsFor(project?.todos, planId), [project, planId]);
+  const [pinMove, setPinMove] = useState(null); // { id, idx, x, y } while a question marker is dragged
+  const pinsShown = pinMove ? ventPins.map((v) => (v.q.id === pinMove.id && v.idx === pinMove.idx ? { ...v, pin: { ...v.pin, x: pinMove.x, y: pinMove.y } } : v)) : ventPins;
+  const ventSnap = (p) => {
+    let best = null;
+    for (const v of ventPts) { const d = Math.hypot(v.x - p.x, v.y - p.y); if (d < 260 && (!best || d < best.d)) best = { d, q: [v.x, v.y] }; }
+    for (const l of ventLines) for (const q of l.pts) { const d = Math.hypot(q[0] - p.x, q[1] - p.y); if (d < 160 && (!best || d < best.d)) best = { d, q: [q[0], q[1]] }; }
+    return best ? best.q : [snap(p.x), snap(p.y)];
+  };
+  const finishDraft = (d) => {
+    if (d && d.pts.length >= 2) {
+      pushUndo();
+      const id = uid("vl");
+      setVentLines((a) => [...a, { id, sys: d.sys, pts: d.pts, ...(d.arrow ? { arrow: true } : {}) }]);
+      setSel({ kind: "vent", vk: "line", id });
+    }
+    setVentDraft(null);
+  };
+  const setTodos = (fn) => updateProject({ todos: fn(project?.todos || []) });
+  const onVentDown = (p) => {
+    if (ventTool === "valj") {
+      const h = ventHit({ ventLines, ventPts }, ventPins, p.x, p.y);
+      if (!h) return false;
+      if (h.kind === "pt") {
+        const v = ventPts.find((x) => x.id === h.id);
+        setSel({ kind: "vent", vk: "pt", id: h.id });
+        dragRef.current = { kind: "ventpt", id: h.id, dx: p.x - v.x, dy: p.y - v.y, pre: takeSnap(), moved: false };
+      } else if (h.kind === "line") {
+        const l = ventLines.find((x) => x.id === h.id);
+        setSel({ kind: "vent", vk: "line", id: h.id });
+        dragRef.current = h.vertex >= 0
+          ? { kind: "ventvtx", id: h.id, idx: h.vertex, pre: takeSnap(), moved: false }
+          : { kind: "ventline", id: h.id, x0: p.x, y0: p.y, pts0: l.pts.map((q) => [...q]), pre: takeSnap(), moved: false };
+      } else {
+        setSel({ kind: "vent", vk: "pin", id: h.id, idx: h.idx });
+        dragRef.current = { kind: "ventpin", id: h.id, idx: h.idx, moved: false };
+      }
+      return true;
+    }
+    if (ventTool === "kanal" || ventTool === "pil") {
+      const q = ventSnap(p), arrow = ventTool === "pil";
+      const d = ventDraft && !!ventDraft.arrow === arrow ? ventDraft : { sys: ventSys, pts: [], arrow };
+      const last = d.pts[d.pts.length - 1];
+      if (last && Math.hypot(last[0] - q[0], last[1] - q[1]) < 1) { finishDraft(d); return true; } // tap the last point again = done
+      const nd = { ...d, pts: [...d.pts, q] };
+      if (arrow && nd.pts.length === 2) finishDraft(nd); else setVentDraft(nd);
+      return true;
+    }
+    if (ventTool === "fraga") {
+      const t = prompt("Fråga till VVS (hamnar i Projekt → Att besluta / att göra):", "");
+      if (!t || !t.trim()) return true;
+      const id = uid("q");
+      setTodos((ts) => [...ts, { id, area: VENT_TOPIC, item: t.trim(), detail: "", who: "VVS", due: "", status: "Öppen", pins: [{ plan: planId, x: snap(p.x), y: snap(p.y) }] }]);
+      setSel({ kind: "vent", vk: "pin", id, idx: 0 });
+      return true;
+    }
+    // don | flakt | stam | aggregat
+    let label;
+    if (ventTool === "stam") { label = prompt("Stammens namn:", ventSys === "S2B" ? "S2-B" : ventSys === "S2K" ? "S2-K" : "S1"); if (label === null) return true; }
+    if (ventTool === "aggregat") { label = prompt("Aggregat (kort text, t.ex. FL eller BV):", ventSys === "BV" ? "BV" : "FL"); if (label === null) return true; }
+    pushUndo();
+    const id = uid("vp");
+    const [x, y] = ventTool === "don" || ventTool === "flakt" ? [snap(p.x), snap(p.y)] : ventSnap(p);
+    setVentPts((a) => [...a, { id, sys: ventSys, kind: ventTool, x, y, ...(label ? { label: label.trim() } : {}), ...(ventTool === "aggregat" ? { w: 600, h: 600 } : {}) }]);
+    setSel({ kind: "vent", vk: "pt", id });
+    return true;
+  };
+
   const onCanvasDown = (e) => {
     const p = toSvg(e.clientX, e.clientY);
+    if (!readOnly && mode === "vent" && onVentDown(p)) return;
     // Calibrate the background: tap two points a known distance apart.
     if (calib) {
       const pts = [...calib.pts, [p.x, p.y]];
@@ -676,6 +762,15 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       }
     } else if (d.kind === "area") {
       setAreas((a) => a.map((r) => (r.id === d.id ? { ...r, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : r)));
+    } else if (d.kind === "ventpt") {
+      setVentPts((a) => a.map((v) => (v.id === d.id ? { ...v, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : v)));
+    } else if (d.kind === "ventvtx") {
+      setVentLines((a) => a.map((l) => (l.id === d.id ? { ...l, pts: l.pts.map((q, i) => (i === d.idx ? [snap(p.x), snap(p.y)] : q)) } : l)));
+    } else if (d.kind === "ventline") {
+      const dx = snap(p.x - d.x0), dy = snap(p.y - d.y0);
+      setVentLines((a) => a.map((l) => (l.id === d.id ? { ...l, pts: d.pts0.map((q) => [q[0] + dx, q[1] + dy]) } : l)));
+    } else if (d.kind === "ventpin") {
+      setPinMove({ id: d.id, idx: d.idx, x: snap(p.x), y: snap(p.y) });
     } else if (d.kind === "group") {
       // Move every grouped item together (furniture may cross/exit walls).
       setItems((a) => a.map((it) => {
@@ -745,6 +840,13 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
         dragRef.current = null;
         return;
       }
+      if (d.kind === "ventpin") {
+        if (d.moved && pinMove) {
+          const { id, idx, x, y } = pinMove;
+          setTodos((ts) => ts.map((t) => (t.id === id ? { ...t, pins: (t.pins || []).map((q, i) => (i === idx ? { ...q, x, y } : q)) } : t)));
+        }
+        setPinMove(null); dragRef.current = null; return;
+      }
       if (d.pre && d.moved) {
         undoRef.current.push(d.pre);
         if (undoRef.current.length > 80) undoRef.current.shift();
@@ -775,6 +877,15 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   const selCm = sel?.kind === "cm" ? comments.find((c) => c.id === sel.id) : null;
   const selDim = sel?.kind === "dim" ? liveDims.find((d) => d.id === sel.id) : null;
   const selArea = sel?.kind === "area" ? areas.find((a) => a.id === sel.id) : null;
+  const selVent = sel?.kind !== "vent" ? null
+    : sel.vk === "pt" ? (() => { const o = ventPts.find((v) => v.id === sel.id); return o ? { vk: "pt", o } : null; })()
+    : sel.vk === "line" ? (() => { const o = ventLines.find((v) => v.id === sel.id); return o ? { vk: "line", o } : null; })()
+    : (() => { const o = ventQuestions(project?.todos).find((q) => q.id === sel.id); return o ? { vk: "pin", o, idx: sel.idx } : null; })();
+  const updVent = (fn) => {
+    pushUndo();
+    if (selVent?.vk === "pt") setVentPts((a) => a.map((v) => (v.id === sel.id ? fn(v) : v)));
+    if (selVent?.vk === "line") setVentLines((a) => a.map((v) => (v.id === sel.id ? fn(v) : v)));
+  };
   const areaOf = (ar) => (summary ? summary.byArea[ar.id] : null);
   const commentNumber = (id) => comments.findIndex((c) => c.id === id) + 1;
   const updOp = (fn) => { pushUndo(); setOpenings((a) => a.map((o) => (o.id === sel.id ? fn(o) : o))); };
@@ -788,6 +899,8 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     if (selCm) { if (selCm.photoPath) deletePhoto(selCm.photoPath); setComments((a) => a.filter((c) => c.id !== sel.id)); }
     if (selDim) setDims((a) => a.filter((d) => d.id !== sel.id));
     if (selArea) setAreas((a) => a.filter((r) => r.id !== sel.id));
+    if (selVent?.vk === "pt") setVentPts((a) => a.filter((v) => v.id !== sel.id));
+    if (selVent?.vk === "line") setVentLines((a) => a.filter((v) => v.id !== sel.id));
     setSel(null);
   };
   const renameSel = () => {
@@ -865,6 +978,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       // in focus mode: the crop of the floor plan, with the room's own comments/objects
       const { pdfPlanArgs } = await import("../floorRooms.js");
       const pa = pdfPlanArgs({ plan: focused ? "floor" : null, areas: focus }, { room, openings, items, walls, comments, dims, areas });
+      if (showVent && (hasVent({ ventLines, ventPts }) || ventPins.length)) pa.svg.vent = { ventLines, ventPts, pins: ventPins };
       const svgString = buildPlanSvg(pa.svg);
       const roomId = spaceId || storageKey.replace(/^.*plan:/, "");
       const { loadRoomPdfData } = await import("../state.js");
@@ -1144,6 +1258,10 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
             <button style={{ ...(focusOn ? btn : btnOn), whiteSpace: "nowrap" }} onClick={() => { setFocusOn((f) => !f); setView(null); }}
               title={focusOn ? "Visa hela planet" : "Visa bara rummet"}>▣<span className="pl-lbl">{focusOn ? " Hela planet" : " Bara rummet"}</span></button>
           )}
+          {(hasVent({ ventLines, ventPts }) || ventPins.length > 0) && mode !== "vent" && (
+            <button style={{ ...(showVent ? btnOn : btn), whiteSpace: "nowrap" }} title={showVent ? "Dölj ventilationen" : "Visa ventilationen"}
+              onClick={() => setShowVent((v) => { try { localStorage.setItem("vs:v1:ui:vent", v ? "0" : "1"); } catch { /* ignore */ } return !v; })}>🌬<span className="pl-lbl"> Ventilation</span></button>
+          )}
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={printPlan} title="PDF">⬇<span className="pl-lbl"> PDF</span></button>
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={() => setFull((f) => !f)}>
             {full ? "✕" : "⤢"}<span className="pl-lbl">{full ? " Stäng" : " Helskärm"}</span>
@@ -1160,6 +1278,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
         {modeBtn("mat", "📏 Mät")}
         {modeBtn("ytor", "▦ Ytor m²")}
         {modeBtn("kommentar", "💬 Kommentar")}
+        {modeBtn("vent", "🌬 Rita ventilation")}
         {modeBtn("bakgrund", "🖼 Bakgrund")}
       </div>
       )}
@@ -1203,6 +1322,30 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
           <button style={btn} onClick={() => { setMeasures([]); setMStart(null); setMPreview(null); }}>Rensa tillfälliga</button>
           <button style={snapOn ? { ...btnOn, background: blue, borderColor: blue } : btn} onClick={() => setSnapOn((s) => !s)}>{snapOn ? "✓ Fäst mot objekt" : "Fäst mot objekt"}</button>
           <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>{saveMeas ? "Sparade mått blir kvar på ritningen — dra måttlinjen i sidled för att lägga den bredvid bilden." : "Tryck/dra mellan två punkter · nära vågrätt/lodrätt låses · slå på “Spara mått” för bestående mått"}</span>
+        </div>
+      )}
+
+      {!readOnly && !full && mode === "vent" && (
+        <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
+          {[["valj", "Välj / flytta"], ["kanal", "Kanal"], ["pil", "Luftpil"], ["don", "Don"], ["flakt", "Takfläkt"], ["stam", "Stam"], ["aggregat", "Aggregat"], ["fraga", "❓ Fråga till VVS"]].map(([k, l]) => (
+            <button key={k} style={ventTool === k ? btnOn : btn} onClick={() => { setVentTool(k); setVentDraft(null); }}>{l}</button>
+          ))}
+          {ventDraft && <button style={{ ...btnOn, background: blue, borderColor: blue }} onClick={() => finishDraft(ventDraft)}>✓ Klar</button>}
+          {ventDraft && <button style={btn} onClick={() => setVentDraft(null)}>Avbryt</button>}
+        </div>
+      )}
+      {!readOnly && !full && mode === "vent" && ventTool !== "valj" && ventTool !== "fraga" && (
+        <div className="pl-bar" style={{ display: "flex", gap: 6, padding: "0 16px 8px", alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#7A756E" }}>System:</span>
+          {Object.entries(VENT_SYS).map(([k, d]) => (
+            <button key={k} style={{ ...btn, padding: "6px 10px", fontSize: 12, ...(ventSys === k ? { background: d.color, color: "#fff", borderColor: d.color } : { borderColor: d.color, color: d.color }) }}
+              onClick={() => { setVentSys(k); setVentDraft((dr) => (dr ? { ...dr, sys: k } : dr)); }}>{d.label}</button>
+          ))}
+          <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
+            {ventTool === "kanal" ? "Tryck punkt för punkt, ✓ Klar (eller tryck sista punkten igen). Punkter fäster mot stammar och don."
+              : ventTool === "pil" ? "Två tryck: varifrån luften kommer → vart den går."
+              : "Tryck där den ska sitta."}
+          </span>
         </div>
       )}
 
@@ -1511,6 +1654,24 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
           })}
           </g>
 
+          {/* ventilation layer (dims the building while editing it) */}
+          {(mode === "vent" || (showVent && (ventLines.length || ventPts.length || pinsShown.length))) ? (
+            <g style={{ pointerEvents: "none" }}>
+              {mode === "vent" && <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill={paper} opacity="0.45" />}
+              <g dangerouslySetInnerHTML={{ __html: ventSvg({ ventLines, ventPts }, pinsShown) }} />
+              {ventDraft && ventDraft.pts.length > 0 && (
+                <polyline points={ventDraft.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={ventColor(ventDraft.sys)} strokeWidth={LINE_W} strokeDasharray="90 60" />
+              )}
+              {ventDraft && ventDraft.pts.map((q, i) => <circle key={i} cx={q[0]} cy={q[1]} r="60" fill={ventColor(ventDraft.sys)} />)}
+              {selVent?.vk === "pt" && <circle cx={selVent.o.x} cy={selVent.o.y} r={selVent.o.kind === "aggregat" ? Math.max(selVent.o.w || 600, selVent.o.h || 600) * 0.75 : 260} fill="none" stroke={blue} strokeWidth="30" strokeDasharray="70 45" />}
+              {selVent?.vk === "line" && <>
+                <polyline points={selVent.o.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={blue} strokeWidth={LINE_W + 90} opacity="0.3" strokeLinejoin="round" />
+                {selVent.o.pts.map((q, i) => <rect key={i} x={q[0] - 70} y={q[1] - 70} width="140" height="140" fill="#fff" stroke={blue} strokeWidth="22" />)}
+              </>}
+              {selVent?.vk === "pin" && (() => { const pin = pinsShown.find((v) => v.q.id === selVent.o.id && v.idx === selVent.idx)?.pin; return pin ? <circle cx={pin.x} cy={pin.y} r="290" fill="none" stroke={blue} strokeWidth="30" strokeDasharray="70 45" /> : null; })()}
+            </g>
+          ) : null}
+
           {/* focus: dim everything but the focused rooms and their walls */}
           {focused && (
             <g style={{ pointerEvents: "none" }}>
@@ -1619,10 +1780,12 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
               </g>
             );
           })}
+          {/* in ventilation mode every tap goes to the layer (nothing underneath – comments, objects – steals it) */}
+          {!readOnly && mode === "vent" && <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill="transparent" />}
         </svg>
 
         {/* selection controls — absolute overlay so selecting never reflows/rescales the canvas */}
-        {!readOnly && (selOp || selIt || selCm || selDim || selArea) && (
+        {!readOnly && (selOp || selIt || selCm || selDim || selArea || selVent) && (
           <div style={{ position: "absolute", left: 8, right: 8, bottom: 8, background: "#fff", border: `1.5px solid ${ink}`, borderRadius: 10, padding: "8px 12px", paddingBottom: "calc(8px + env(safe-area-inset-bottom))", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", zIndex: 3 }}>
           {selOp && (
             <>
@@ -1678,6 +1841,44 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
                 <span style={{ fontSize: 11, color: "#7A756E", fontWeight: 400 }}>{selDim.ra || selDim.rb ? " · fäst i ritningen" : " · fritt"}</span></div>
               <button style={btn} onClick={() => updDim((d) => ({ ...d, off: -(d.off || 0) }))}>⇄ Byt sida</button>
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
+            </>
+          )}
+          {selVent && selVent.vk !== "pin" && (
+            <>
+              <div style={{ fontWeight: 600 }}>🌬 {selVent.vk === "line" ? (selVent.o.arrow ? "Luftpil" : "Kanal") : (VENT_KINDS.find(([k]) => k === selVent.o.kind) || [, "Punkt"])[1]}{selVent.o.label ? " " + selVent.o.label : ""}</div>
+              <select value={selVent.o.sys} onChange={(e) => { const sys = e.target.value; updVent((v) => ({ ...v, sys })); }} style={{ ...btn, padding: "7px 8px", color: ventColor(selVent.o.sys) }}>
+                {Object.entries(VENT_SYS).map(([k, d]) => <option key={k} value={k}>{d.label}</option>)}
+              </select>
+              {selVent.vk === "pt" && (selVent.o.kind === "stam" || selVent.o.kind === "aggregat") && (
+                <button style={btn} onClick={() => { const n = prompt("Text:", selVent.o.label || ""); if (n !== null) updVent((v) => ({ ...v, label: n.trim() })); }}>✎ Text</button>
+              )}
+              {selVent.vk === "pt" && selVent.o.kind === "stam" && (
+                <button style={btn} onClick={() => updVent((v) => { const o = { ...v }; if (o.lside === -1) delete o.lside; else o.lside = -1; return o; })}>⇄ Text vänster/höger</button>
+              )}
+              {selVent.vk === "pt" && (selVent.o.kind === "don" || selVent.o.kind === "flakt") && (
+                <button style={btn} onClick={() => { const n = prompt("Flöde (l/s, tomt = inget):", selVent.o.flow || ""); if (n !== null) updVent((v) => { const f = n.trim().replace(",", "."); const o = { ...v }; if (f) o.flow = f; else delete o.flow; return o; }); }}>{selVent.o.flow ? selVent.o.flow + " l/s" : "l/s"}</button>
+              )}
+              {selVent.vk === "pt" && selVent.o.kind === "aggregat" && <>
+                <button style={btn} onClick={() => updVent((v) => ({ ...v, w: Math.max(200, (v.w || 600) - 100) }))}>B −</button>
+                <button style={btn} onClick={() => updVent((v) => ({ ...v, w: (v.w || 600) + 100 }))}>B +</button>
+                <button style={btn} onClick={() => updVent((v) => ({ ...v, h: Math.max(200, (v.h || 600) - 100) }))}>D −</button>
+                <button style={btn} onClick={() => updVent((v) => ({ ...v, h: (v.h || 600) + 100 }))}>D +</button>
+              </>}
+              {selVent.vk === "line" && <button style={selVent.o.arrow ? btnOn : btn} onClick={() => updVent((v) => { const o = { ...v }; if (o.arrow) delete o.arrow; else o.arrow = true; return o; })}>➜ Pil</button>}
+              {selVent.vk === "line" && <button style={btn} onClick={() => updVent((v) => ({ ...v, pts: [...v.pts].reverse() }))}>⇄ Vänd</button>}
+              <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
+            </>
+          )}
+          {selVent && selVent.vk === "pin" && (
+            <>
+              <div style={{ fontWeight: 600, maxWidth: 420 }}>❓ V{selVent.o.vnum} <span style={{ fontWeight: 400 }}>{selVent.o.item}</span></div>
+              <button style={btn} onClick={() => { const n = prompt("Frågan:", selVent.o.item || ""); if (n !== null && n.trim()) setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, item: n.trim() } : t))); }}>✎ Text</button>
+              <button style={btn} onClick={() => { const n = prompt("Svar / detaljer:", selVent.o.detail || ""); if (n !== null) setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, detail: n } : t))); }}>✎ Svar</button>
+              <select value={selVent.o.status || "Öppen"} onChange={(e) => { const st = e.target.value; setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, status: st } : t))); }} style={{ ...btn, padding: "7px 8px" }}>
+                {["Öppen", "Pågår", "Klar"].map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+              <button style={btn} onClick={() => { setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, pins: (t.pins || []).filter((_, i) => i !== selVent.idx) } : t))); setSel(null); }}>Ta bort markören</button>
+              <button style={{ ...btn, color: red, borderColor: red }} onClick={() => { if (confirm("Ta bort frågan helt (även från Projekt)?")) { setTodos((ts) => ts.filter((t) => t.id !== selVent.o.id)); setSel(null); } }}>Ta bort frågan</button>
             </>
           )}
           {selArea && (

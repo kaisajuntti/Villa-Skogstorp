@@ -279,6 +279,17 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   across the longer side + arrow pointing up (towards the start of the run, or the end when `rev`); `stairLines()` in
   planSvg.js; palette "TRAPPA"; selection bar ⇄ Upp åt andra hållet / Steg −/+.
   AREA_KINDS now include **`ute`** (outdoors: m² shown, walls towards it not counted, own legend line).
+- **Ventilationslager (2026-10-18)** `src/planner/vent.js`: plan fields `ventLines:[{id,sys,pts,arrow?}]` (kanal / luftpil)
+  and `ventPts:[{id,sys,kind:don|flakt|stam|aggregat,x,y,w?,h?,label?,flow?,lside?}]` (id-lists → per-object merge).
+  Systems `VENT_SYS`: F frånluft till återvinning · S2B · S2K · T friskluft/uteluft · A avluft · BV bergvärmepump (own colours).
+  Planner mode **"🌬 Rita ventilation"** (tools Välj/flytta, Kanal, Luftpil, Don, Takfläkt, Stam, Aggregat, ❓ Fråga till VVS;
+  system chips; a catcher rect at the end of the SVG takes every tap in this mode) + header toggle "🌬 Ventilation"
+  (`vs:v1:ui:vent`). **Questions** = project todos with `area:"Ventilation"` + `pins:[{plan,x,y}]`, drawn as V1…Vn (order among
+  Ventilation todos; grey when Klar); pins draggable, ✎ Svar/status in the selection bar. Area label `novent:true` = outside
+  the system. `ventFlowRows` = per room m² × **BBR 0,35 l/s/m²** + the room's dons (flows left empty for the VVS).
+  Shown in Våningar (checkbox "🌬 Ventilation", `vs:v1:ui:floorVent`, legend + `VentTable`), Projekt section **8
+  "Ventilation – underlag till VVS"** (`VentSection.jsx`: förutsättningar, frågor, flödestabell) and the project PDF
+  (`renderVent`: förutsättningar + frågor, one page per drawn floor with legend, flödestabell). `buildPlanSvg({vent})`.
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
     geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a
@@ -475,13 +486,17 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   **Offert Snickarglädje (2026-10-14): tillbyggnadens 22 fönster (inkl. välvt källarfönster + glasparti) + källardörr = 500 000
   inkl. moms (400 000 exkl.)** – i budget som en post. Befintligt hus: **11 fönster** (inte 20), uppskattat ~17 000 kr/st exkl.
   efter den offerten tills egen offert finns.
-- **Ventilation (beslutat 2026-10)**: frånluft (F) i stället för FTX. Tillbyggnaden: frånluftsmodul (NIBE FLM) mot
-  bergvärmen i **teknikrum = förrådet i tillbyggnadens källare** (bekräftat; INSTALL i befintlig källare är dagens plats för installationerna – dålig plats, ska inte användas), schakt **S1** intill tvättnedkastet (WC/D plan 2 + tvätt/städ plan 1 → källarens
-  undertak), dusch + bastu direkt. Befintligt: vindsfläkt för master bath + WC entré; köket = **takfläkt över ön** med
-  fjärrmotor på vinden, kanal i kökets tak till schakt **S2** (garderobshörnet i walk-in closet ovanför skafferiet).
-  Tilluft via fönsterventiler (beställs med fönstren) + uteluftsdon bakom radiatorer i sovrummen. Inget don i gymmet,
-  ingen extern kaminluft (för nu). Ingen murstock/fundament i källaren – prefab lättskorsten. Underlag: bildspelet "Förslag till VVS" (privat bilaga, vs-docs);
-  de äldre skisserna låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 (finns kvar i git-historiken tills den rensas – kräver force-push, ägarens beslut).
+- **Ventilation (gäller 2026-10-18 – bildspelet "Förslag till VVS" styr tills annat beslutas)**: frånluftssystem.
+  **Väst (tillbyggnaden)**: frånluftsmodul med återvinning till bergvärmen (FL + BV) i **teknikrum = förrådet i
+  tillbyggnadens källare** (INSTALL i befintlig källare ska inte användas); stam **S1** enligt bildspelet (WC/D plan 2 +
+  tvätt plan 1 → källarens undertak; på P2 hamnar S1 i garderoben i nischen – fråga V7); dusch + bastu direkt till modulen;
+  uteluft in till gymmet. **Öst (befintligt)** ej kopplat till återvinningen: **S2-B** (master bath + WC) och **S2-K**
+  (köket: **takfläkt över ön**, fjärrmotor på vinden) till vindsfläktar, S2 i garderobshörnet ovanför skafferiet. Tilluft via
+  fönsterventiler + uteluftsdon. Kamin (Contura) uteluft i egen kanal om modellen tillåter. Vinkällaren ingår inte
+  (`novent`). Ingen murstock/fundament i källaren – prefab lättskorsten. Förutsättningar = beslut med area "Ventilation"
+  (vdec1–7), frågor = todos V1–V7. Underlag: bildspelet (privat bilaga i vs-docs, ej i PDF:en) + tre äldre skisser (arkiv);
+  de låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 (finns kvar i git-historiken tills den rensas
+  – kräver force-push, ägarens beslut).
 - **Bergvärmepump: inverterstyrd, 0–16 kW** (rättat 2026-10-04 från ~12 kW; budget 115 000 kr inkl. VVB). Borrdjup 200 m i
   budgeten – med 16 kW och ~300 m² kan det behövas 250–300 m (låt borrfirman räkna; står i att göra-listan).
 - **El (beslutat 2026-10)**: elcentral i **städ plan 1** (tillbyggnaden), kablar ner till teknikrummet via S1 (ingen

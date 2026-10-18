@@ -19,7 +19,7 @@ export function parseAreaRoomId(id) {
 }
 
 // "MASTER BEDROOM" → "Master bedroom", "WC/D" stays; two labels with the same name get 1, 2.
-const KEEP = /\b(wc|kpr|tv|d)\b/g;
+const KEEP = /(?<!\p{L})(wc|kpr|tv|d)(?!\p{L})/gu;
 export function prettyName(name) {
   const s = (name || "").toLowerCase().replace(KEEP, (m) => m.toUpperCase());
   return s.charAt(0).toUpperCase() + s.slice(1);

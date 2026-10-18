@@ -13,6 +13,7 @@ import {
   FloorsRoomsOptions, PdfBuilder, CoverImagePicker,
 } from "../components/ProjectSections.jsx";
 import VersionHistory from "../components/VersionHistory.jsx";
+import VentSection from "../components/VentSection.jsx";
 import fullPlan from "../assets/situationsplan_full.jpg";
 
 // [id, nr, title] — the PDF's table of contents.
@@ -24,8 +25,9 @@ export const PDF_SECTIONS = [
   ["decisions", 5, "Beslutslogg & att göra"],
   ["budget", 6, "Arbetsplan & budget"],
   ["floors", 7, "Våningar & utrymmen"],
-  ["colors", 8, "Färgschema"],
-  ["attachments", 9, "Bilagor"],
+  ["vent", 8, "Ventilation – underlag till VVS"],
+  ["colors", 9, "Färgschema"],
+  ["attachments", 10, "Bilagor"],
 ];
 
 export default function Project() {
@@ -121,6 +123,9 @@ export default function Project() {
 
       {S("floors", `Länkad från Våningar och utrymmena · ${roomsOn} av ${(rooms || []).length} utrymmen med`,
         <FloorsRoomsOptions opts={opts} rooms={rooms} />)}
+
+      {S("vent", `${(space.todos || []).filter((t) => t.area === "Ventilation" && (t.status || "Öppen") !== "Klar").length} öppna frågor · ${(space.decisions || []).filter((d) => d.area === "Ventilation").length} förutsättningar`,
+        <VentSection space={space} />)}
 
       {S("colors", `${(space.colors || []).length} kulörer`, <ColorScheme space={space} update={update} />)}
 

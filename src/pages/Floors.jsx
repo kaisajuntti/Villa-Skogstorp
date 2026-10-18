@@ -12,6 +12,8 @@ import { storage, bgKey } from "../storage.js";
 import { buildPlanSvg } from "../planner/planSvg.js";
 import { areaGrid, areaSummary, regionAt, regionRects, kindTag, fmtM2 } from "../planner/geom.js";
 import { useFloorPlan, areaNames, areaRoomId } from "../floorRooms.js";
+import { ventPinsFor, hasVent, VENT_SYS, ventSystemsUsed } from "../planner/vent.js";
+import VentTable from "../components/VentTable.jsx";
 
 const short = (name) => (name || "").replace(/^(K|P1|P2)\s*·\s*/, "");
 const centroid = (poly) => {
@@ -57,6 +59,10 @@ function LivePlan({ planId, rooms, floor }) {
   const plan = useFloorPlan(planId);
   const [hover, setHover] = useState(null); // { regs:[…] } highlighted from the plan or the lists
   const [showDims, setShowDims] = useState(false);
+  const [project] = useSpace("project");
+  const [showVent, setShowVent] = useState(() => { try { return localStorage.getItem("vs:v1:ui:floorVent") === "1"; } catch { return false; } });
+  const toggleVent = (v) => { setShowVent(v); try { localStorage.setItem("vs:v1:ui:floorVent", v ? "1" : "0"); } catch { /* ignore */ } };
+  const pins = useMemo(() => ventPinsFor(project?.todos, planId), [project, planId]);
   const overlay = useRef(null);
   const live = useMemo(() => {
     if (!plan?.room) return null;
@@ -65,7 +71,9 @@ function LivePlan({ planId, rooms, floor }) {
     const reg = Object.fromEntries(areas.map((a) => [a.id, regionAt(grid, a.x, a.y)]));
     return { grid, summary, reg, areas, names: areaNames(areas) };
   }, [plan]);
-  const svg = useMemo(() => (plan?.room ? buildPlanSvg({ ...plan, dims: showDims ? plan.dims || [] : [], comments: [], embedBg: false }) : ""), [plan, showDims]);
+  const ventOn = showVent && (hasVent(plan) || pins.length > 0);
+  const svg = useMemo(() => (plan?.room ? buildPlanSvg({ ...plan, dims: showDims ? plan.dims || [] : [], comments: [], embedBg: false,
+    vent: ventOn ? { ventLines: plan.ventLines, ventPts: plan.ventPts, pins } : null }) : ""), [plan, showDims, ventOn, pins]);
   if (plan === null) return <p className="sub">Laddar planen …</p>;
   if (!live) return <p className="sub">Planen för våningen saknas.</p>;
   const vb = (svg.match(/viewBox="([^"]+)"/) || [])[1] || "0 0 1 1";
@@ -88,6 +96,7 @@ function LivePlan({ planId, rooms, floor }) {
       <p className="sub">
         Tryck på ett rum för att öppna det (utsnitt av planen – allt går att redigera där).{" "}
         <label style={{ whiteSpace: "nowrap" }}><input type="checkbox" checked={showDims} onChange={(e) => setShowDims(e.target.checked)} /> Visa mått</label>{" "}
+        {(hasVent(plan) || pins.length > 0) && <><label style={{ whiteSpace: "nowrap" }}><input type="checkbox" checked={showVent} onChange={(e) => toggleVent(e.target.checked)} /> 🌬 Ventilation</label>{" "}</>}
         · <a href={"#/rum/" + planId}>✏️ Redigera hela planet</a>
       </p>
       <div style={{ position: "relative", aspectRatio: `${vw} / ${vh}`, width: `min(100%, calc(78vh * ${(vw / vh).toFixed(4)}))`, margin: "0 auto", background: "#FAF8F3", border: "1.5px solid var(--ink)", borderRadius: 10, overflow: "hidden" }}>
@@ -103,6 +112,17 @@ function LivePlan({ planId, rooms, floor }) {
         <p className="sub" style={{ marginTop: 6 }}>
           <b>BOA {f1(sm.sum.boa)} m²</b>{sm.sum.bia > 0.05 && <> · <b>BIA {f1(sm.sum.bia)} m²</b></>} · enligt SS 21054, räknat från väggarna
         </p>
+      )}
+
+      {ventOn && (
+        <>
+          <p className="sub" style={{ marginTop: 2 }}>
+            {ventSystemsUsed([plan]).map((k) => <span key={k} style={{ marginRight: 12, whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 18, height: 4, background: VENT_SYS[k].color, verticalAlign: "middle", marginRight: 5 }} />{VENT_SYS[k].label}</span>)}
+            <span style={{ whiteSpace: "nowrap" }}>Fyrkant = stam · cirkel = frånluftsdon · cirkel med kryss = takfläkt · V = fråga till VVS</span>
+          </p>
+          <h2>Ventilation – flöden {floor.title}</h2>
+          <VentTable floors={[{ title: floor.title, plan }]} />
+        </>
       )}
 
       <h2>Rum – {floor.title}</h2>

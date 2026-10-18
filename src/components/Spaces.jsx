@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
 import { usePlanComments, usePlanItems, useRooms, loadPlanForPrint } from "../state.js";
+import { useFloorPlan, cropPlan, pdfPlanArgs } from "../floorRooms.js";
 import { buildPlanSvg } from "../planner/planSvg.js";
 
 // Presentational: numbered cards for a room's plan comments/photos.
@@ -11,7 +12,7 @@ function CommentCards({ items }) {
       {items.map((c, i) => (
         <div key={c.id || i} className="card">
           <div className="row">
-            <div className="grow"><strong>#{i + 1} · {c.photo ? "📷 Bild" : "💬 Kommentar"}</strong></div>
+            <div className="grow"><strong>#{c.num ?? i + 1} · {c.photo ? "📷 Bild" : "💬 Kommentar"}</strong></div>
           </div>
           {c.photo && (
             <img src={c.photo} alt="" loading="lazy"
@@ -72,8 +73,11 @@ function RoomComments({ roomId }) {
 
 // Read-only section on a room's Documents tab that auto-collects that room's
 // plan comments & photos — handy for a print-out. Editing happens on the plan.
-export function PlanCollection({ roomId }) {
-  const items = usePlanComments(roomId);
+export function PlanCollection({ roomId, areas = null }) {
+  const all = usePlanComments(roomId);
+  const floor = useFloorPlan(areas ? roomId : null);
+  // a room on a floor plan: only the comments inside it, numbered as on the floor plan
+  const items = areas ? cropPlan(floor, areas)?.comments || [] : all;
   if (!items.length) return null;
   return (
     <div style={{ marginTop: 26 }}>
@@ -87,9 +91,11 @@ export function PlanCollection({ roomId }) {
 // Inventory of every object drawn on the plan (name + size), with an editable
 // comment and optional link per object. Notes/links live on the space record
 // (keyed by item id); names/sizes are read live from the plan.
-export function InventoryList({ roomId, space, update }) {
+export function InventoryList({ roomId, areas = null, space, update }) {
   const ro = !canEdit();
-  const items = usePlanItems(roomId);
+  const all = usePlanItems(roomId);
+  const floor = useFloorPlan(areas ? roomId : null);
+  const items = areas ? cropPlan(floor, areas)?.items || [] : all;
   const inv = space.inventory || {};
   const setField = (id, field, val) => update({ inventory: { ...inv, [id]: { ...(inv[id] || {}), [field]: val } } });
   return (
@@ -145,14 +151,14 @@ export function RoomsCommentBrowser({ cover, colors }) {
   // Full per-room data for the PDF renderer (used for single-room and whole-project).
   const sectionFor = async (room) => {
     const { plan, bgImg, space } = await loadPlanForPrint(room.id);
-    const svgString = buildPlanSvg({
-      room: plan.room, openings: plan.openings || [], items: plan.items || [],
-      walls: plan.walls || [], comments: plan.comments || [], dims: plan.dims || [], areas: plan.areas || [], embedBg: false,
-    });
+    // utrymmen on a floor plan print their crop of it
+    const floor = room.plan && room.areas?.length ? (await loadPlanForPrint(room.plan)).plan : null;
+    const pa = pdfPlanArgs(floor ? room : {}, floor || plan);
+    const svgString = buildPlanSvg(pa.svg);
     return {
-      roomName: room.name, svgString, comments: plan.comments || [], bgImg, bgT: plan.bg || null,
+      roomName: room.name, svgString, comments: pa.comments, bgImg: pa.crop ? null : bgImg, bgT: pa.crop ? null : plan.bg || null,
       description: space.description || "", actions: space.actions || "",
-      colors: space.colors || [], docs: space.docs || [], items: plan.items || [], inventory: space.inventory || {},
+      colors: space.colors || [], docs: space.docs || [], items: pa.items, inventory: space.inventory || {},
     };
   };
   const printRoom = async (room) => {

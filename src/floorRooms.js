@@ -4,6 +4,7 @@
 // { plan, areas }.
 import { useEffect, useState } from "react";
 import { storage, planKey } from "./storage.js";
+import { areaGrid, regionAt, regionRects } from "./planner/geom.js";
 
 export const PLAN_FLOOR = {
   "u-k-hela": { floor: "kallare", short: "K", title: "Källare" },
@@ -45,9 +46,34 @@ export function useFloorPlan(planId) {
       } catch { if (alive) setPlan({}); }
     };
     setPlan(null);
-    if (planId) load();
+    if (!planId) return undefined;
+    load();
     window.addEventListener("vs-sync", load);
     return () => { alive = false; window.removeEventListener("vs-sync", load); };
   }, [planId]);
   return plan;
+}
+
+// The part of a floor plan that belongs to some of its room labels: the rooms' regions as rectangles, plus
+// which comments (marker inside) and objects (centre inside or within a wall's width of it) are in them.
+// Comments keep their floor-plan number (num) so the lists match the markers in the planner.
+export function cropPlan(plan, areaIds) {
+  if (!plan?.room || !areaIds?.length) return null;
+  const grid = areaGrid(plan.room, plan.walls || []), ids = new Set(areaIds);
+  const regs = [...new Set((plan.areas || []).filter((a) => ids.has(a.id)).map((a) => regionAt(grid, a.x, a.y)).filter((r) => r >= 0))];
+  if (!regs.length) return null;
+  const rects = regionRects(grid, regs, 0);
+  const inside = (x, y, pad = 0) => rects.some((r) => x >= r[0] - pad && x <= r[2] + pad && y >= r[1] - pad && y <= r[3] + pad);
+  const comments = (plan.comments || []).map((c, i) => ({ ...c, num: i + 1 })).filter((c) => inside(c.tx ?? c.x, c.ty ?? c.y));
+  const items = (plan.items || []).filter((it) => inside(it.x + it.w / 2, it.y + it.h / 2, 200));
+  return { rects, comments, items };
+}
+
+// Everything the PDF renderers need for a room: own plan, or the floor-plan crop for an utrymme ({ plan, areas }).
+export function pdfPlanArgs(room, plan) {
+  const crop = room?.plan && room.areas?.length ? cropPlan(plan, room.areas) : null;
+  const base = { room: plan.room || { w: 4000, l: 3000 }, openings: plan.openings || [], items: plan.items || [],
+    walls: plan.walls || [], dims: plan.dims || [], areas: plan.areas || [], embedBg: false };
+  if (!crop) return { svg: { ...base, comments: plan.comments || [] }, comments: plan.comments || [], items: plan.items || [], crop: false };
+  return { svg: { ...base, comments: crop.comments, focus: crop.rects }, comments: crop.comments, items: crop.items, crop: true };
 }

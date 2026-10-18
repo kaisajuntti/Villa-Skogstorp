@@ -249,7 +249,14 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   The room page opens the floor plan in **focus mode** (`RoomPlanner focus={areaIds}`): fit view = the rooms' bbox +
   900 mm, everything else dimmed by an SVG mask (still editable – walls, everything), "▣ Hela planet" toggles.
   Utrymmen can show their old own drawing via "Egen ritning (arkiv)" (per device `vs:v1:ui:ownPlan`).
-  TODO step 4: comments/photos from the old utrymme plans → the floor plans, PDF per room from the crop.
+  **Step 4 (2026-10-18)**: `cropPlan(plan, areaIds)` (floorRooms.js) = the rooms' region rects + the comments whose marker
+  is inside (keeping their floor-plan number `num`, shown in CommentCards) + objects whose centre is inside (±200 mm).
+  Dokument tab (PlanCollection/InventoryList with `areas`) lists only those. PDFs: `pdfPlanArgs(room, plan)` →
+  `buildPlanSvg({ …, focus: rects })` crops to the rooms (+900 mm, rest dimmed, no floor summary) – used by the planner's
+  ⬇ PDF (`spaceId` prop = the room's space), RoomsCommentBrowser and the project PDF (`roomData`). Project PDF floor
+  overview = the live floor plan (with dims, m², BOA/BIA) when `floor.plan` is set; the hela-plan rooms are not printed
+  again as utrymmen. Old utrymme plans = archive (only the kitchen had comments; they were already in u-p1-hela via
+  whole_merge; no inventory notes existed).
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
     geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a

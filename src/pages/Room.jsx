@@ -97,7 +97,7 @@ export default function Room({ roomId, roomsApi }) {
           {showInspo && inspo.length > 0 && <InspoPanel items={inspo} narrow={narrow} />}
           <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
             {crop
-              ? <RoomPlanner key={room.id + ":crop"} storageKey={planKey(room.plan)} focus={room.areas} title={room.name.toUpperCase()} />
+              ? <RoomPlanner key={room.id + ":crop"} storageKey={planKey(room.plan)} focus={room.areas} spaceId={room.id} title={room.name.toUpperCase()} />
               : <RoomPlanner key={room.id} storageKey={planKey(room.id)} title={room.name.toUpperCase() + (room.plan ? " (ARKIV)" : "")} />}
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function Room({ roomId, roomsApi }) {
             ) : (
               <>
                 {tab === "farger" && (<><h2>Färger & material — {room.name}</h2><ColorScheme space={space} update={update} /></>)}
-                {tab === "dokument" && (<><h2>Dokument & länkar — {room.name}</h2><InspoGallery space={space} update={update} /><DocList space={space} update={update} /><InventoryList roomId={room.id} space={space} update={update} /><PlanCollection roomId={room.id} /></>)}
+                {tab === "dokument" && (<><h2>Dokument & länkar — {room.name}</h2><InspoGallery space={space} update={update} /><DocList space={space} update={update} /><InventoryList roomId={crop ? room.plan : room.id} areas={crop ? room.areas : null} space={space} update={update} /><PlanCollection roomId={crop ? room.plan : room.id} areas={crop ? room.areas : null} /></>)}
                 {tab === "anteckningar" && (<><h2>Anteckningar — {room.name}</h2><p className="sub" style={{ marginTop: -4 }}>Kladdanteckningar — snabba, tillfälliga noteringar. För en samlad beskrivning, använd “Beskrivning” under Dokument.</p><Notes space={space} update={update} placeholder={`Kladd för ${room.name} …`} /></>)}
                 <VersionHistory storageKey={spaceKey(room.id)} />
                 {tab === "anteckningar" && (

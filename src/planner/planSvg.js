@@ -129,7 +129,7 @@ export function coveredItemIds(items) {
 }
 
 // Build a standalone SVG string for a plan (mm units). `bgImg` = {dataUrl,w,h}, `bgT` = transform.
-export function buildPlanSvg({ room, openings = [], items = [], walls = [], comments = [], dims = [], areas = [], bgImg = null, bgT = null, embedBg = true }) {
+export function buildPlanSvg({ room, openings = [], items = [], walls = [], comments = [], dims = [], areas = [], bgImg = null, bgT = null, embedBg = true, focus = null }) {
   if (!room) room = { w: 3500, l: 6430 };
   let bx0 = -WALL, by0 = -WALL, bx1 = room.w + WALL, by1 = room.l + WALL;
   for (const it of items) {
@@ -142,8 +142,13 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
   const db = dimsBounds(liveDims);
   if (db) { bx0 = Math.min(bx0, db[0]); by0 = Math.min(by0, db[1]); bx1 = Math.max(bx1, db[2]); by1 = Math.max(by1, db[3]); }
   const summary = areas.length ? areaSummary(areaGrid(room, walls), areas) : null;
-  const legend = areaLegend(summary), legendAt = [bx0, by1 + 500];
+  // focus (rects of some rooms on a floor plan): crop to them, the rest dimmed, no floor summary
+  const legend = focus ? [] : areaLegend(summary), legendAt = [bx0, by1 + 500];
   if (legend.length) by1 += 500 + legend.length * LEGEND_STEP + 200;
+  if (focus?.length) {
+    bx0 = Math.min(...focus.map((r) => r[0])) - 900; by0 = Math.min(...focus.map((r) => r[1])) - 900;
+    bx1 = Math.max(...focus.map((r) => r[2])) + 900; by1 = Math.max(...focus.map((r) => r[3])) + 900;
+  }
   const VB = { x: bx0 - M, y: by0 - M, w: (bx1 - bx0) + 2 * M, h: (by1 - by0) + 2 * M };
 
   let s = "";
@@ -213,6 +218,11 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
     const rot = pl.horiz ? "" : ` transform="rotate(-90 ${pl.cx} ${pl.cy})"`;
     if (pl.leader) s += `<line x1="${pl.ax}" y1="${pl.ay}" x2="${pl.cx}" y2="${pl.cy}" stroke="${ink}" stroke-width="8" opacity="0.5"/>`;
     if (label) s += `<text x="${pl.cx}" y="${pl.cy + pl.fs * 0.34}" text-anchor="middle" font-size="${pl.fs}" fill="${ink}" font-family="'Avenir Next','Helvetica Neue',Arial,sans-serif"${rot}>${esc(label)}</text>`;
+  }
+  if (focus?.length) {
+    const big = `x="${VB.x - 1e5}" y="${VB.y - 1e5}" width="${VB.w + 2e5}" height="${VB.h + 2e5}"`;
+    s += `<mask id="vsfm"><rect ${big} fill="#fff"/>` + focus.map((r) => `<rect x="${r[0] - 330}" y="${r[1] - 330}" width="${r[2] - r[0] + 660}" height="${r[3] - r[1] + 660}" fill="#000"/>`).join("") + `</mask>`;
+    s += `<rect ${big} fill="${paper}" opacity="0.72" mask="url(#vsfm)"/>`;
   }
   comments.forEach((c, i) => {
     const num = i + 1, badgeR = 135;

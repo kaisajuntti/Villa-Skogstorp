@@ -6,6 +6,7 @@
 // main bundle).
 import { storage, bgKey, spaceKey, roomsKey } from "../storage.js";
 import { loadPlanForPrint } from "../state.js";
+import { pdfPlanArgs } from "../floorRooms.js";
 import { signedDocUrl } from "../photos.js";
 import { buildPlanSvg } from "./planSvg.js";
 import { newDoc, safe, hexToRgb, loadImg, svgToJpeg, fetchDataUrl } from "./pdf.js";
@@ -530,6 +531,16 @@ function renderBudget(W, P, n, title, budgets) {
 
 // ---- våningar & utrymmen ----
 async function floorOverview(fl, rooms) {
+  // the live floor plan (walls, rooms with m², BOA/BIA) when the floor has one
+  if (fl.plan) {
+    const { plan } = await loadPlanForPrint(fl.plan);
+    if (plan?.room) {
+      try {
+        const r = await svgToJpeg(buildPlanSvg({ ...plan, comments: [], embedBg: false }), 2000);
+        return { data: r.dataUrl, ratio: r.ratio };
+      } catch { /* fall back to the architect's image */ }
+    }
+  }
   const r = await getJson(bgKey("floor-" + fl.id));
   if (!r?.dataUrl) return null;
   try {
@@ -561,14 +572,14 @@ async function floorOverview(fl, rooms) {
 
 async function roomData(room) {
   const { plan, bgImg, space } = await loadPlanForPrint(room.id);
-  const svgString = buildPlanSvg({
-    room: plan.room || { w: 4000, l: 3000 }, openings: plan.openings || [], items: plan.items || [],
-    walls: plan.walls || [], comments: plan.comments || [], dims: plan.dims || [], areas: plan.areas || [], embedBg: false,
-  });
+  // utrymmen on a floor plan print their crop of it
+  const floor = room.plan && room.areas?.length ? (await loadPlanForPrint(room.plan)).plan : null;
+  const pa = pdfPlanArgs(floor ? room : {}, floor || plan);
+  const svgString = buildPlanSvg(pa.svg);
   return {
-    roomName: short(room.name), svgString, comments: plan.comments || [], bgImg, bgT: plan.bg || null,
+    roomName: short(room.name), svgString, comments: pa.comments, bgImg: pa.crop ? null : bgImg, bgT: pa.crop ? null : plan.bg || null,
     description: space.description || "", actions: space.actions || "",
-    colors: space.colors || [], docs: space.docs || [], items: plan.items || [], inventory: space.inventory || {},
+    colors: space.colors || [], docs: space.docs || [], items: pa.items, inventory: space.inventory || {},
     inspo: space.inspo || [],
   };
 }
@@ -709,13 +720,16 @@ async function renderFloors(W, P, n, title, floorsRec, rooms, progress) {
   const floors = floorsRec?.floors || [];
   const placed = new Set(floors.flatMap((f) => (f.areas || []).map((a) => a.roomId)));
   const groups = floors.map((f) => ({ floor: f, rooms: (f.areas || []).map((a) => byId[a.roomId]).filter(Boolean) }));
-  const loose = rooms.filter((r) => !placed.has(r.id));
+  const floorPlans = new Set(floors.map((f) => f.plan).filter(Boolean)); // shown as the overviews
+  const loose = rooms.filter((r) => !placed.has(r.id) && !floorPlans.has(r.id));
   if (loose.length) groups.push({ floor: null, rooms: loose });
   const isOn = (r) => ropt[r.id]?.on !== false;
   const any = groups.some((g) => (g.floor && !ovOff.includes(g.floor.id)) || g.rooms.some(isOn));
   if (!any) return false;
   W.h1(n, title);
-  W.note("Gult = tillbyggnad, blått = befintligt hus. Varje utrymme beskrivs på följande sidor.");
+  W.note(floors.some((f) => f.plan)
+    ? "Varje våning med rummens ytor (BOA/BIA enligt SS 21054). Varje utrymme beskrivs på följande sidor, som utsnitt av planen."
+    : "Gult = tillbyggnad, blått = befintligt hus. Varje utrymme beskrivs på följande sidor.");
   W.y += 4;
   let firstOnPage = true;
   const { doc } = W;

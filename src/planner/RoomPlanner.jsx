@@ -122,7 +122,7 @@ function downscaleImage(file, maxDim = 1600, quality = 0.72) {
   });
 }
 
-export default function RoomPlanner({ storageKey, title, focus = null }) {
+export default function RoomPlanner({ storageKey, title, focus = null, spaceId = null }) {
   const readOnly = !canEdit();
   const [room, setRoom] = useState({ w: 3500, l: 6430 });
   const [openings, setOpenings] = useState([]); // {id, wall, pos, len, kind, flip}
@@ -860,16 +860,19 @@ export default function RoomPlanner({ storageKey, title, focus = null }) {
   const printPlan = async () => {
     setStatus("Skapar PDF …");
     try {
-      const svgString = buildPlanSvg({ room, openings, items, walls, comments, dims, embedBg: false });
-      const roomId = storageKey.replace(/^.*plan:/, "");
+      // in focus mode: the crop of the floor plan, with the room's own comments/objects
+      const { pdfPlanArgs } = await import("../floorRooms.js");
+      const pa = pdfPlanArgs({ plan: focused ? "floor" : null, areas: focus }, { room, openings, items, walls, comments, dims, areas });
+      const svgString = buildPlanSvg(pa.svg);
+      const roomId = spaceId || storageKey.replace(/^.*plan:/, "");
       const { loadRoomPdfData } = await import("../state.js");
       const { space, cover } = await loadRoomPdfData(roomId);
       const { savePlanPdf } = await import("./pdf.js");
       await savePlanPdf({
-        roomName: title, svgString, comments, bgImg, bgT, cover,
+        roomName: title, svgString, comments: pa.comments, bgImg: pa.crop ? null : bgImg, bgT: pa.crop ? null : bgT, cover,
         description: space.description || "", actions: space.actions || "",
         colors: space.colors || [], docs: space.docs || [],
-        items, inventory: space.inventory || {},
+        items: pa.items, inventory: space.inventory || {},
       });
       setStatus("PDF sparad");
     } catch { setStatus("Kunde inte skapa PDF"); }

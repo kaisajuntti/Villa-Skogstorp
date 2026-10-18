@@ -257,6 +257,22 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   overview = the live floor plan (with dims, m², BOA/BIA) when `floor.plan` is set; the hela-plan rooms are not printed
   again as utrymmen. Old utrymme plans = archive (only the kitchen had comments; they were already in u-p1-hela via
   whole_merge; no inventory notes existed).
+- **Balkong + granskning (2026-10-18)**: P2 balkong drawn in `u-p2-hela` directly (not via the scripts – a re-run of
+  whole_clean drops it): railing `wBR` (50 mm, on the inner edge of the architect's 200 mm slab band, deck inside
+  4501–11134 × 11502–13945 = 16,2 m²), label `a12` kind **`ute`**, room `u-p2-balkong` = `{plan:u-p2-hela, areas:[a12]}`;
+  the south façade chains moved outside the balcony. Old `p2-master-bedroom-walk-i-yc88` removed from the rooms list.
+  Review (`scripts/floorplans/review/`, README there): walls match the architect's vector layers within 5 mm except the
+  owner's own changes (P2 walk-ins/master v2, P1 kitchen/hall wall, murstock + skorsten fundament removed); room m² with the
+  architect's own walls = ours ±0,01 – **the architect's m² texts are rounded/stale** (K gym "21,0" = 21,8 drawn, duschrum
+  5,0/4,6, trapphall 8,0/7,6, P1 gästrum 13,0/12,7, P2 WC/D 4,5/5,8 …). Fixed: P1 trapphall north glasparti = 3 fönster
+  (posts 8000–8168, 9098–9266; was one 3,15 m "oppning"), duplicate pardörr on the owner's entré→vardagsrum oppning
+  removed, kitchen wall o42 60 mm stub trimmed, P2 door to RUM (was oppning), 14 objects moved flush to the exact wall
+  faces (P2 S bed was 40 mm into the wall, kitchen sittbänk 110 mm), labels de-cluttered (`declutter.mjs`).
+  Open questions to the owner: allrum S window 7010–8164 (architect: window, owner deleted the opening → wall now);
+  bastu has no door (glass wall ends 36 cm from KPR); kitchen E window 11950–13098 has the architect's inner lining
+  across it; källare "valvöppning" vs "ingen valvöppning behövs" (door in the new Exakt wall?); arbetsrum→vardagsrum
+  is a skjutdörr in the drawing (drawn as oppning); stairs are not drawn on any floor.
+  AREA_KINDS now include **`ute`** (outdoors: m² shown, walls towards it not counted, own legend line).
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
     geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a

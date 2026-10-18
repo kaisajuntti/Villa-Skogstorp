@@ -245,8 +245,9 @@ export function areaAt(grid, x, y) {
 }
 
 // Room area classes for the floor summary (SS 21054): BOA boarea, BIA biarea, EJ = not counted (e.g. the
-// stairwell on the upper floor – a stair counts on the floor it starts from).
-export const AREA_KINDS = [["boa", "BOA"], ["bia", "BIA"], ["ej", "Räknas ej"]];
+// stairwell on the upper floor – a stair counts on the floor it starts from), UTE = outdoors (balkong, terrass):
+// its m² is shown, and a wall towards it is an outer wall (not counted, like a wall towards the outside).
+export const AREA_KINDS = [["boa", "BOA"], ["bia", "BIA"], ["ej", "Räknas ej"], ["ute", "Ute"]];
 
 // Floor summary: m² per room label plus BOA/BIA totals the way SS 21054 measures them – to the inside of the
 // outer walls, interior walls included (a wall between two counted rooms is split half/half; a wall towards the
@@ -258,7 +259,7 @@ export function areaSummary(grid, areas) {
   // label every free region (a region touching the grid border is the outside) and find each wall cell's two
   // neighbouring regions across its thinner direction – cached per grid, labels only pick kinds
   const { reg, regArea, regOut, wallCells } = gridRegions(grid);
-  const kindOf = new Map(), byArea = {}, sum = { boa: 0, bia: 0, ej: 0 }, rooms = { boa: 0, bia: 0, ej: 0 }, walls = { boa: 0, bia: 0, ej: 0 };
+  const kindOf = new Map(), byArea = {}, sum = { boa: 0, bia: 0, ej: 0, ute: 0 }, rooms = { boa: 0, bia: 0, ej: 0, ute: 0 }, walls = { boa: 0, bia: 0, ej: 0, ute: 0 };
   for (const ar of areas) {
     const x = ar.x, y = ar.y;
     if (x <= X[0] || x >= X[nx] || y <= Y[0] || y >= Y[ny]) { byArea[ar.id] = null; continue; }
@@ -269,7 +270,7 @@ export function areaSummary(grid, areas) {
   }
   for (const [ra, rb, a] of wallCells) {
     const ka = kindOf.get(ra), kb = kindOf.get(rb);
-    if (!ka || !kb) continue; // towards the outside / an unlabelled space: measured to the inside face
+    if (!ka || !kb || ka === "ute" || kb === "ute") continue; // towards the outside / an unlabelled space: measured to the inside face
     walls[ka] += a / 2e6; walls[kb] += a / 2e6;
   }
   for (const k of Object.keys(sum)) sum[k] = rooms[k] + walls[k];
@@ -355,11 +356,12 @@ export function areaLegend(sm) {
   if (sm.sum.bia > 0.05) out.push({ t: "BIA " + f(sm.sum.bia), big: true });
   out.push({ t: `rum ${f(sm.rooms.boa + sm.rooms.bia)} + innerväggar ${f(sm.walls.boa + sm.walls.bia)}` });
   if (sm.sum.ej > 0.05) out.push({ t: "räknas ej " + f(sm.sum.ej) + " (trapphål o.d.)" });
+  if (sm.sum.ute > 0.05) out.push({ t: "ute " + f(sm.sum.ute) + " (balkong o.d.)" });
   out.push({ t: "SS 21054: till ytterväggarnas insida" });
   return out;
 }
 export const LEGEND_STEP = 360;
-export const kindTag = (k) => (k === "bia" ? " · BIA" : k === "ej" ? " · ej" : "");
+export const kindTag = (k) => (k === "bia" ? " · BIA" : k === "ej" ? " · ej" : k === "ute" ? " · ute" : "");
 
 // "10,4 m²" (Swedish decimal comma), or "– m²" for an open region.
 export const fmtM2 = (v) => (v == null ? "– m²" : v.toFixed(1).replace(".", ",") + " m²");

@@ -296,6 +296,11 @@ export function regionAt(grid, x, y) {
   return r < 0 || regOut[r] ? -1 : r;
 }
 
+// m² of a region index from regionAt (0 for -1).
+export function regionArea(grid, r) {
+  return grid && r >= 0 ? gridRegions(grid).regArea[r] / 1e6 : 0;
+}
+
 // The regions as rectangles [x0, y0, x1, y1] (row runs, stacked runs merged), grown by pad mm –
 // for highlighting a room or masking everything around a focused one.
 export function regionRects(grid, regIds, pad = 0) {

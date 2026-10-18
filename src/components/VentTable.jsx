@@ -1,6 +1,8 @@
 // Ventilation flow table (BBR 0,35 l/s per m²) per room, live from the floor plans' walls, room labels and
 // ventilation layer – used on Våningar (one floor) and in Projekt (all floors).
-import { VENT_SYS, ventFlowRows, fmtLs, ventColor } from "../planner/vent.js";
+import { LAYERS, ventFlowRows, fmtLs, sysColor } from "../planner/inst.js";
+
+const VENT_SYS = LAYERS.vent.sys, ventColor = (s) => sysColor("vent", s);
 
 const th = { textAlign: "left", fontWeight: 600, fontSize: 12, color: "var(--muted)", padding: "4px 8px", borderBottom: "1px solid var(--line)" };
 const td = { fontSize: 13, padding: "4px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "top" };

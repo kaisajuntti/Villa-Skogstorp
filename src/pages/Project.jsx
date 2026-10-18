@@ -1,6 +1,6 @@
 // Projekt = the project PDF, section by section (same order, same numbering).
-// Own-data sections (1–5, 8, 9) are written here; linked sections (6 Budget, 7 Våningar &
-// utrymmen) show a summary + PDF options, their content is edited on their own pages.
+// Own-data sections (1–5, 12, 13) are written here; linked sections (6 Budget, 7 Våningar &
+// utrymmen, 8–11 installationer from the floor plans) show a summary + PDF options, their content is edited on their own pages.
 // Things that are not part of the PDF live under "Övrigt" at the bottom.
 import { useRef, useState } from "react";
 import { useSpace, useRooms, exportAll, importAll } from "../state.js";
@@ -13,7 +13,7 @@ import {
   FloorsRoomsOptions, PdfBuilder, CoverImagePicker,
 } from "../components/ProjectSections.jsx";
 import VersionHistory from "../components/VersionHistory.jsx";
-import VentSection from "../components/VentSection.jsx";
+import InstSection, { useFloorPlans, layerSummary } from "../components/InstSection.jsx";
 import fullPlan from "../assets/situationsplan_full.jpg";
 
 // [id, nr, title] — the PDF's table of contents.
@@ -26,14 +26,18 @@ export const PDF_SECTIONS = [
   ["budget", 6, "Arbetsplan & budget"],
   ["floors", 7, "Våningar & utrymmen"],
   ["vent", 8, "Ventilation – underlag till VVS"],
-  ["colors", 9, "Färgschema"],
-  ["attachments", 10, "Bilagor"],
+  ["el", 9, "El – underlag till elektriker"],
+  ["va", 10, "Vatten & avlopp – underlag till VVS"],
+  ["varme", 11, "Värme – underlag till VVS"],
+  ["colors", 12, "Färgschema"],
+  ["attachments", 13, "Bilagor"],
 ];
 
 export default function Project() {
   const [space, update] = useSpace("project");
   const { rooms } = useRooms();
   const sum = useBudgetSummary();
+  const floorPlans = useFloorPlans();
   const [status, setStatus] = useState("");
   const [showOther, setShowOther] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(null); // "all" | section id
@@ -92,8 +96,8 @@ export default function Project() {
     <div className="page">
       <h1>PROJEKT</h1>
       <p className="sub">
-        Sidan är uppbyggd som projekt-PDF:en – samma avsnitt i samma ordning. Text och bilder i avsnitt 1–5, 8 och 9
-        skrivs här; budget och utrymmen hämtas från sina egna sidor och här väljer du bara vad som ska med.
+        Sidan är uppbyggd som projekt-PDF:en – samma avsnitt i samma ordning. Text och bilder i avsnitt 1–5, 12 och 13
+        skrivs här; budget, utrymmen och installationerna (8–11) hämtas från sina egna sidor och planerna.
       </p>
 
       <PdfBuilder opts={opts} sections={PDF_SECTIONS} onBuild={() => buildPdf("all")} busy={pdfBusy} status={pdfStatus} />
@@ -124,8 +128,7 @@ export default function Project() {
       {S("floors", `Länkad från Våningar och utrymmena · ${roomsOn} av ${(rooms || []).length} utrymmen med`,
         <FloorsRoomsOptions opts={opts} rooms={rooms} />)}
 
-      {S("vent", `${(space.todos || []).filter((t) => t.area === "Ventilation" && (t.status || "Öppen") !== "Klar").length} öppna frågor · ${(space.decisions || []).filter((d) => d.area === "Ventilation").length} förutsättningar`,
-        <VentSection space={space} />)}
+      {["vent", "el", "va", "varme"].map((k) => S(k, layerSummary(space, k), <InstSection space={space} layer={k} floors={floorPlans} />))}
 
       {S("colors", `${(space.colors || []).length} kulörer`, <ColorScheme space={space} update={update} />)}
 

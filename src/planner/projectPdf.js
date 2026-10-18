@@ -9,7 +9,7 @@ import { loadPlanForPrint } from "../state.js";
 import { pdfPlanArgs } from "../floorRooms.js";
 import { signedDocUrl } from "../photos.js";
 import { buildPlanSvg } from "./planSvg.js";
-import { VENT_SYS, VENT_TOPIC, ventQuestions, ventPinsFor, ventSystemsUsed, hasVent, ventFlowRows, fmtLs } from "./vent.js";
+import { LAYERS, isTopic, layerQuestions, layerPins, layerOf, hasLayer, systemsUsed, kindsUsed, ventFlowRows, layerRoomRows, itemText, fmtLs, fmtNum } from "./inst.js";
 import { newDoc, safe, hexToRgb, loadImg, svgToJpeg, fetchDataUrl } from "./pdf.js";
 import { computeBudget, BUILDS, matLines, lineAmt, est, parseNum, PARTS, WHO } from "../budgetCalc.js";
 
@@ -754,21 +754,22 @@ async function renderFloors(W, P, n, title, floorsRec, rooms, progress) {
   return true;
 }
 
-// ---- ventilation: underlag till VVS ----
-async function renderVent(W, P, n, title, floorsRec, progress) {
-  const { doc } = W;
+// ---- installations (ventilation, el, vatten & avlopp, värme): underlag till installatören ----
+const SHAPE_WORD = { circle: "cirkel", cross: "cirkel med kryss", square: "fylld fyrkant", rect: "rektangel", dot: "punkt", boxx: "ruta med kryss", bar: "streck", zone: "färgat rum" };
+async function renderInst(W, P, n, title, floorsRec, progress, layer) {
+  const { doc } = W, L = LAYERS[layer];
   const floors = [];
   for (const f of floorsRec?.floors || []) {
     if (!f.plan) continue;
     const { plan } = await loadPlanForPrint(f.plan);
     if (plan?.room) floors.push({ ...f, p: plan });
   }
-  const decisions = (P.decisions || []).filter((d) => d.area === VENT_TOPIC);
-  const qs = ventQuestions(P.todos);
-  const drawn = floors.filter((f) => hasVent(f.p) || ventPinsFor(P.todos, f.plan).length);
+  const decisions = (P.decisions || []).filter((d) => isTopic(layer, d.area));
+  const qs = layerQuestions(P.todos, layer);
+  const drawn = floors.filter((f) => hasLayer(f.p, layer) || layerPins(P.todos, layer, f.plan).length);
   if (!decisions.length && !qs.length && !drawn.length) return false;
   W.h1(n, title);
-  W.note("Förslag till VVS-projektör – inte slutlig plan. Ritat i de exakta planerna; flöden räknas ur rummens ytor.");
+  W.note(`Förslag till ${L.who.toLowerCase() === "vvs" ? "VVS-projektör" : L.who.toLowerCase()} – inte slutlig plan. Ritat i de exakta planerna${layer === "vent" ? "; flöden räknas ur rummens ytor" : ""}.`);
   W.y += 2;
   const sub = (k, t) => `${n ? n + "." : ""}${k}  ${t}`;
   let k = 0;
@@ -778,46 +779,59 @@ async function renderVent(W, P, n, title, floorsRec, progress) {
   }
   if (qs.length) {
     W.ensure(30);
-    W.h2(sub(++k, "Frågor till VVS"), `${qs.filter((q) => (q.status || "Öppen") !== "Klar").length} öppna`);
+    W.h2(sub(++k, "Frågor till " + L.who), `${qs.filter((q) => (q.status || "Öppen") !== "Klar").length} öppna`);
     const where = (q) => (q.pins || []).map((p) => floors.find((f) => f.plan === p.plan)?.title || "").filter(Boolean).join(", ");
-    W.table([{ label: "Nr", w: 10 }, { label: "Fråga / svar" }, { label: "I ritningen", w: 26 }, { label: "Status", w: 16 }],
-      qs.map((q) => ({ cells: ["V" + q.vnum, (q.item || "") + (q.detail ? "\n" + q.detail : ""), where(q), q.status || "Öppen"], muted: q.status === "Klar" })), { size: 8.8 });
+    W.table([{ label: "Nr", w: 11 }, { label: "Fråga / svar" }, { label: "I ritningen", w: 26 }, { label: "Status", w: 16 }],
+      qs.map((q) => ({ cells: [q.tag, (q.item || "") + (q.detail ? "\n" + q.detail : ""), where(q), q.status || "Öppen"], muted: q.status === "Klar" })), { size: 8.8 });
   }
   // the plans with the layer
   for (const f of drawn) {
-    progress?.("Ventilation – " + f.title);
-    const pins = ventPinsFor(P.todos, f.plan);
+    progress?.(L.label + " – " + f.title);
+    const pins = layerPins(P.todos, layer, f.plan);
     let img = null;
     try {
-      const r = await svgToJpeg(buildPlanSvg({ ...f.p, dims: [], comments: [], embedBg: false, vent: { ventLines: f.p.ventLines, ventPts: f.p.ventPts, pins } }), 2200);
+      const r = await svgToJpeg(buildPlanSvg({ ...f.p, dims: [], comments: [], embedBg: false, inst: { layers: [{ key: layer, ...layerOf(f.p, layer), pins }] } }), 2200);
       img = { data: r.dataUrl, ratio: r.ratio };
     } catch { /* skip */ }
     W.newPage("p");
-    W.h2(sub(++k, "Ventilation – " + f.title));
+    W.h2(sub(++k, L.label + " – " + f.title));
     if (img) W.image(img, { maxH: 205 });
     // legend
     W.ensure(14);
     let x = M;
-    for (const key of ventSystemsUsed([f.p])) {
-      const c = hexToRgb(VENT_SYS[key].color);
+    for (const key of systemsUsed(layer, [f.p])) {
+      const c = hexToRgb(L.sys[key].color);
       doc.setFillColor(c.r, c.g, c.b); doc.rect(x, W.y - 2.2, 7, 1.6, "F");
-      W.font(8, "normal", TXT); doc.text(VENT_SYS[key].label, x + 9, W.y);
-      x += 11 + doc.getTextWidth(VENT_SYS[key].label) + 6;
+      W.font(8, "normal", TXT); doc.text(L.sys[key].label, x + 9, W.y);
+      x += 11 + doc.getTextWidth(L.sys[key].label) + 6;
       if (x > W.pw() - M - 40) { x = M; W.y += 5; }
     }
     W.y += 5;
-    W.font(8, "normal", MUTED); doc.text("Fyrkant = vertikal stam · cirkel = frånluftsdon · cirkel med kryss = takfläkt · V = fråga till VVS", M, W.y); W.y += 6;
+    const key = kindsUsed(layer, [f.p]).map((d) => `${d.shape === "letter" ? d.sym : SHAPE_WORD[d.shape] || d.shape} = ${d.label.toLowerCase()}`);
+    key.push(`${L.pre}1 … = fråga till ${L.who}`);
+    W.font(8, "normal", MUTED);
+    for (const line of doc.splitTextToSize("Symboler: " + key.join(" · "), W.pw() - 2 * M)) { doc.text(line, M, W.y); W.y += 4; }
+    W.y += 2;
   }
-  // flow table
-  const rows = floors.flatMap((f) => ventFlowRows(f.p, f.title));
-  if (rows.length) {
-    W.ensure(40);
-    W.h2(sub(++k, "Flöden per rum"), "BBR: 0,35 l/s per m²");
-    W.table([{ label: "Våning", w: 18 }, { label: "Rum", w: 40 }, { label: "m²", w: 14 }, { label: "Krav l/s", w: 16 }, { label: "Frånluft i rummet" }],
-      rows.map((r) => ({ cells: [r.floor, r.name + (r.novent ? " (ingår ej)" : r.kind === "ej" ? " (räknas ej)" : ""), r.m2 == null ? "–" : r.m2.toFixed(1).replace(".", ","),
-        r.req ? fmtLs(r.req) : "–", r.terms.map((t) => `${t.kind === "flakt" ? "takfläkt" : "don"} ${(VENT_SYS[t.sys]?.label || "").split(" ")[0]}${t.flow != null ? " " + fmtLs(t.flow) + " l/s" : ""}`).join(", ")], muted: !r.req })), { size: 8.5 });
-    const req = rows.reduce((s, r) => s + r.req, 0);
-    W.para(`Grundkrav totalt: ${fmtLs(req)} l/s (golvytor ur planerna; vinkällaren och ytor som inte räknas ingår inte).`, { size: 9 });
+  if (layer === "vent") {
+    const rows = floors.flatMap((f) => ventFlowRows(f.p, f.title));
+    if (rows.length) {
+      W.ensure(40);
+      W.h2(sub(++k, "Flöden per rum"), "BBR: 0,35 l/s per m²");
+      W.table([{ label: "Våning", w: 18 }, { label: "Rum", w: 40 }, { label: "m²", w: 14 }, { label: "Krav l/s", w: 16 }, { label: "Frånluft i rummet" }],
+        rows.map((r) => ({ cells: [r.floor, r.name + (r.novent ? " (ingår ej)" : r.kind === "ej" ? " (räknas ej)" : ""), r.m2 == null ? "–" : r.m2.toFixed(1).replace(".", ","),
+          r.req ? fmtLs(r.req) : "–", r.terms.map((t) => `${t.kind === "flakt" ? "takfläkt" : "don"} ${(L.sys[t.sys]?.label || "").split(" ")[0]}${t.flow != null ? " " + fmtLs(t.flow) + " l/s" : ""}`).join(", ")], muted: !r.req })), { size: 8.5 });
+      const req = rows.reduce((s, r) => s + r.req, 0);
+      W.para(`Grundkrav totalt: ${fmtLs(req)} l/s (golvytor ur planerna; vinkällaren och ytor som inte räknas ingår inte).`, { size: 9 });
+    }
+  } else {
+    const rows = floors.flatMap((f) => layerRoomRows(f.p, layer, f.title)).filter((r) => r.items.length);
+    if (rows.length) {
+      W.ensure(40);
+      W.h2(sub(++k, "Per rum"));
+      W.table([{ label: "Våning", w: 18 }, { label: "Rum", w: 40 }, { label: "m²", w: 14 }, { label: "I rummet" }],
+        rows.map((r) => [r.floor, r.name, r.m2 == null ? "–" : fmtNum(r.m2), r.items.map(itemText).join(", ")]), { size: 8.5 });
+    }
   }
   return true;
 }
@@ -891,7 +905,7 @@ function renderAttachments(W, atts, n, title) {
 // ---------- main ----------
 export const SECTION_TITLES = {
   cover: "Försättsblad", contacts: "Kontakter & roller", chapters: "Projektbeskrivning", tech: "Tekniska val",
-  decisions: "Beslutslogg & att göra", budget: "Arbetsplan & budget", floors: "Våningar & utrymmen", vent: "Ventilation – underlag till VVS", colors: "Färgschema", attachments: "Bilagor",
+  decisions: "Beslutslogg & att göra", budget: "Arbetsplan & budget", floors: "Våningar & utrymmen", vent: LAYERS.vent.title, el: LAYERS.el.title, va: LAYERS.va.title, varme: LAYERS.varme.title, colors: "Färgschema", attachments: "Bilagor",
 };
 
 export async function buildProjectPdf({ project, ids, filename, onProgress }) {
@@ -927,7 +941,7 @@ export async function buildProjectPdf({ project, ids, filename, onProgress }) {
     else if (id === "decisions") ok = renderDecisions(W, P, num, title);
     else if (id === "budget") ok = renderBudget(W, P, num, title, budgets);
     else if (id === "floors") ok = await renderFloors(W, P, num, title, floorsRec, rooms, progress);
-    else if (id === "vent") ok = await renderVent(W, P, num, title, floorsRec, progress);
+    else if (LAYERS[id]) ok = await renderInst(W, P, num, title, floorsRec, progress, id);
     else if (id === "colors") ok = renderColors(W, P, num, title);
     else if (id === "attachments") ok = renderAttachments(W, atts, num, title);
     if (ok) { n++; toc.push({ n: num, title, page: start }); }

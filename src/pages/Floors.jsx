@@ -12,8 +12,9 @@ import { storage, bgKey } from "../storage.js";
 import { buildPlanSvg } from "../planner/planSvg.js";
 import { areaGrid, areaSummary, regionAt, regionRects, kindTag, fmtM2 } from "../planner/geom.js";
 import { useFloorPlan, areaNames, areaRoomId } from "../floorRooms.js";
-import { ventPinsFor, hasVent, VENT_SYS, ventSystemsUsed } from "../planner/vent.js";
+import { LAYERS, LAYER_KEYS, layerOf, layerPins } from "../planner/inst.js";
 import VentTable from "../components/VentTable.jsx";
+import InstTable, { InstLegend } from "../components/InstTable.jsx";
 
 const short = (name) => (name || "").replace(/^(K|P1|P2)\s*·\s*/, "");
 const centroid = (poly) => {
@@ -60,9 +61,10 @@ function LivePlan({ planId, rooms, floor }) {
   const [hover, setHover] = useState(null); // { regs:[…] } highlighted from the plan or the lists
   const [showDims, setShowDims] = useState(false);
   const [project] = useSpace("project");
-  const [showVent, setShowVent] = useState(() => { try { return localStorage.getItem("vs:v1:ui:floorVent") === "1"; } catch { return false; } });
-  const toggleVent = (v) => { setShowVent(v); try { localStorage.setItem("vs:v1:ui:floorVent", v ? "1" : "0"); } catch { /* ignore */ } };
-  const pins = useMemo(() => ventPinsFor(project?.todos, planId), [project, planId]);
+  // installation layers shown on top (per device; off by default)
+  const [shown, setShown] = useState(() => { try { return JSON.parse(localStorage.getItem("vs:v1:ui:floorInst") || "null") || (localStorage.getItem("vs:v1:ui:floorVent") === "1" ? { vent: true } : {}); } catch { return {}; } });
+  const toggleLayer = (k, v) => setShown((s) => { const n = { ...s, [k]: v }; try { localStorage.setItem("vs:v1:ui:floorInst", JSON.stringify(n)); } catch { /* ignore */ } return n; });
+  const pinsBy = useMemo(() => Object.fromEntries(LAYER_KEYS.map((k) => [k, layerPins(project?.todos, k, planId)])), [project, planId]);
   const overlay = useRef(null);
   const live = useMemo(() => {
     if (!plan?.room) return null;
@@ -71,9 +73,10 @@ function LivePlan({ planId, rooms, floor }) {
     const reg = Object.fromEntries(areas.map((a) => [a.id, regionAt(grid, a.x, a.y)]));
     return { grid, summary, reg, areas, names: areaNames(areas) };
   }, [plan]);
-  const ventOn = showVent && (hasVent(plan) || pins.length > 0);
+  const avail = LAYER_KEYS.filter((k) => { const l = layerOf(plan, k); return l.lines.length || l.pts.length || pinsBy[k].length; });
+  const on = avail.filter((k) => shown[k]);
   const svg = useMemo(() => (plan?.room ? buildPlanSvg({ ...plan, dims: showDims ? plan.dims || [] : [], comments: [], embedBg: false,
-    vent: ventOn ? { ventLines: plan.ventLines, ventPts: plan.ventPts, pins } : null }) : ""), [plan, showDims, ventOn, pins]);
+    inst: on.length ? { layers: on.map((k) => ({ key: k, ...layerOf(plan, k), pins: pinsBy[k] })) } : null }) : ""), [plan, showDims, on.join(), pinsBy]); // eslint-disable-line react-hooks/exhaustive-deps
   if (plan === null) return <p className="sub">Laddar planen …</p>;
   if (!live) return <p className="sub">Planen för våningen saknas.</p>;
   const vb = (svg.match(/viewBox="([^"]+)"/) || [])[1] || "0 0 1 1";
@@ -96,7 +99,7 @@ function LivePlan({ planId, rooms, floor }) {
       <p className="sub">
         Tryck på ett rum för att öppna det (utsnitt av planen – allt går att redigera där).{" "}
         <label style={{ whiteSpace: "nowrap" }}><input type="checkbox" checked={showDims} onChange={(e) => setShowDims(e.target.checked)} /> Visa mått</label>{" "}
-        {(hasVent(plan) || pins.length > 0) && <><label style={{ whiteSpace: "nowrap" }}><input type="checkbox" checked={showVent} onChange={(e) => toggleVent(e.target.checked)} /> 🌬 Ventilation</label>{" "}</>}
+        {avail.map((k) => <span key={k}><label style={{ whiteSpace: "nowrap" }}><input type="checkbox" checked={!!shown[k]} onChange={(e) => toggleLayer(k, e.target.checked)} /> {LAYERS[k].icon} {LAYERS[k].label}</label>{" "}</span>)}
         · <a href={"#/rum/" + planId}>✏️ Redigera hela planet</a>
       </p>
       <div style={{ position: "relative", aspectRatio: `${vw} / ${vh}`, width: `min(100%, calc(78vh * ${(vw / vh).toFixed(4)}))`, margin: "0 auto", background: "#FAF8F3", border: "1.5px solid var(--ink)", borderRadius: 10, overflow: "hidden" }}>
@@ -114,16 +117,13 @@ function LivePlan({ planId, rooms, floor }) {
         </p>
       )}
 
-      {ventOn && (
-        <>
-          <p className="sub" style={{ marginTop: 2 }}>
-            {ventSystemsUsed([plan]).map((k) => <span key={k} style={{ marginRight: 12, whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 18, height: 4, background: VENT_SYS[k].color, verticalAlign: "middle", marginRight: 5 }} />{VENT_SYS[k].label}</span>)}
-            <span style={{ whiteSpace: "nowrap" }}>Fyrkant = stam · cirkel = frånluftsdon · cirkel med kryss = takfläkt · V = fråga till VVS</span>
-          </p>
-          <h2>Ventilation – flöden {floor.title}</h2>
-          <VentTable floors={[{ title: floor.title, plan }]} />
-        </>
-      )}
+      {on.map((k) => (
+        <div key={k}>
+          <h2>{LAYERS[k].icon} {LAYERS[k].label} – {floor.title}</h2>
+          <InstLegend layer={k} plans={[plan]} />
+          {k === "vent" ? <VentTable floors={[{ title: floor.title, plan }]} /> : <InstTable layer={k} floors={[{ title: floor.title, plan }]} />}
+        </div>
+      ))}
 
       <h2>Rum – {floor.title}</h2>
       <div className="cardlist">

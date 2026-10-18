@@ -38,7 +38,7 @@ Live URL: `https://kaisajuntti.github.io/Villa-Skogstorp/`.
 ```
 #/                  Översikt — clickable situationsplan snippet + zone legend
 #/projekt           Project-level: dokument, färgschema, anteckningar, export/import
-#/vaning/<id>       Våningar — kallare | plan1 | plan2: architect plan, tinted befintligt/tillbyggnad, clickable utrymmen
+#/vaning/<id>       Våningar — kallare | plan1 | plan2: live floor plan (+ installation layers), clickable rooms; architect plan as option
 #/budget            Budget & tidsplan — Etapp 1 (huset, till inflytt), space:budget
 #/budget/etapp2     Budget & tidsplan — Etapp 2 (efter inflytt), space:budget2
 #/omrade/<zoneId>   Zone: description + room list (add/rename/delete rooms)
@@ -279,17 +279,32 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   across the longer side + arrow pointing up (towards the start of the run, or the end when `rev`); `stairLines()` in
   planSvg.js; palette "TRAPPA"; selection bar ⇄ Upp åt andra hållet / Steg −/+.
   AREA_KINDS now include **`ute`** (outdoors: m² shown, walls towards it not counted, own legend line).
-- **Ventilationslager (2026-10-18)** `src/planner/vent.js`: plan fields `ventLines:[{id,sys,pts,arrow?}]` (kanal / luftpil)
-  and `ventPts:[{id,sys,kind:don|flakt|stam|aggregat,x,y,w?,h?,label?,flow?,lside?}]` (id-lists → per-object merge).
-  Systems `VENT_SYS`: F frånluft till återvinning · S2B · S2K · T friskluft/uteluft · A avluft · BV bergvärmepump (own colours).
-  Planner mode **"🌬 Rita ventilation"** (tools Välj/flytta, Kanal, Luftpil, Don, Takfläkt, Stam, Aggregat, ❓ Fråga till VVS;
-  system chips; a catcher rect at the end of the SVG takes every tap in this mode) + header toggle "🌬 Ventilation"
-  (`vs:v1:ui:vent`). **Questions** = project todos with `area:"Ventilation"` + `pins:[{plan,x,y}]`, drawn as V1…Vn (order among
-  Ventilation todos; grey when Klar); pins draggable, ✎ Svar/status in the selection bar. Area label `novent:true` = outside
-  the system. `ventFlowRows` = per room m² × **BBR 0,35 l/s/m²** + the room's dons (flows left empty for the VVS).
-  Shown in Våningar (checkbox "🌬 Ventilation", `vs:v1:ui:floorVent`, legend + `VentTable`), Projekt section **8
-  "Ventilation – underlag till VVS"** (`VentSection.jsx`: förutsättningar, frågor, flödestabell) and the project PDF
-  (`renderVent`: förutsättningar + frågor, one page per drawn floor with legend, flödestabell). `buildPlanSvg({vent})`.
+- **Installationslager (2026-10-18)** `src/planner/inst.js` – four layers on the whole-floor plans: **vent** (Ventilation),
+  **el** (El), **va** (Vatten & avlopp), **varme** (Värme). Each layer = two id-lists in the plan record (per-object merge):
+  `<key>Lines:[{id,sys,pts,arrow?}]` (kanal / kabelväg / rör + pil) and `<key>Pts:[{id,sys,kind,x,y,w?,h?,label?,flow?,lside?}]`
+  (`ventLines/ventPts`, `elLines/elPts`, `vaLines/vaPts`, `varmeLines/varmePts`). `LAYERS[key]` defines the systems (colours),
+  line tools and point kinds; a kind's **shape** = circle | cross | letter (text in a ring: U, S, D, W, R, EV, T, WC, DM …,
+  editable per point) | dot | square (stam + side label, `lside`) | rect (unit with white label: EC, VVB, BV, FL, Kamin) |
+  bar (radiator, value above) | boxx (golvbrunn) | **zone** (colours the whole room region it sits in + shows its m² –
+  golvvärme/radiatorer/elgolvvärme per room). `flow` = the kind's value (`unit`: l/s, W). A kind's `sys` is preselected
+  with its tool.
+  Planner mode **"🔧 Installationer"**: layer select + tools + system chips; the other shown layers are faded; a catcher rect
+  at the end of the SVG takes every tap in this mode. Header toggles per layer with content (per device `vs:v1:ui:inst`,
+  edited layer `vs:v1:ui:instLayer`). **Questions** = project todos whose area is one of the layer's `topics`
+  (Ventilation · El / El & styrning · Vatten & avlopp / VVS / Vatten · Värme / Uppvärmning / Bergvärme) with
+  `pins:[{plan,x,y}]`, tagged **V / E / VA / VÄ + number** (order among the layer's todos; grey when Klar); förutsättningar =
+  decisions with those areas. Area label `novent:true` = outside the ventilation. Tables: vent = `ventFlowRows` (m² ×
+  **BBR 0,35 l/s/m²** + dons, flows left for the VVS), others = `layerRoomRows` ("Per rum": counts per kind/label, zone m²).
+  Shown in Våningar (checkbox per layer, `vs:v1:ui:floorInst`, legend with symbol icons + table – `InstTable.jsx`), Projekt
+  sections **8 Ventilation · 9 El · 10 Vatten & avlopp · 11 Värme – underlag** (`InstSection.jsx`; Färgschema 12, Bilagor 13)
+  and the project PDF (`renderInst`: förutsättningar + frågor, one page per drawn floor with legend/symbols, table).
+  `buildPlanSvg({ inst: { layers:[{key,lines,pts,pins,faded}] } })`.
+  **Seeded 2026-10-18** (only what is decided – Tekniska val/this file – the rest as questions E2–E7, VA1–VA6, VÄ2–VÄ6):
+  El: EC in städ P1 (small part west of the stair), kabelväg EC → S1 → teknikrummet, brandvarnare one per floor in the
+  trapphall + P2 hall (proposal, question). VA: VVB in teknikrummet, WC/golvbrunn at the drawn fixtures (P2 master bath),
+  diskho/DM in the kitchen. Värme: GV zones in källarplattan (gym, duschrum, kpr, trapphall) and P1 tillbyggnad (gästrum,
+  tvätt, städ, trapphall, arbetsrum), "GV befintlig" in entré + hall, radiators (RAD zones) on all of P2 except the bathrooms
+  (EGV), BV in teknikrummet, kamin. Tillbyggnad/befintligt per room from the floors record's tint polygons (bg transform).
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see
     geom.js) and follows when the wall/opening/object/room changes (`resolveDims`; saved resolved). `ax` keeps a
@@ -494,7 +509,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   (köket: **takfläkt över ön**, fjärrmotor på vinden) till vindsfläktar, S2 i garderobshörnet ovanför skafferiet. Tilluft via
   fönsterventiler + uteluftsdon. Kamin (Contura) uteluft i egen kanal om modellen tillåter. Vinkällaren ingår inte
   (`novent`). Ingen murstock/fundament i källaren – prefab lättskorsten. Förutsättningar = beslut med area "Ventilation"
-  (vdec1–7), frågor = todos V1–V7. Underlag: bildspelet (privat bilaga i vs-docs, ej i PDF:en) + tre äldre skisser (arkiv);
+  (vdec1–7), frågor = todos V1–V7 (El/VA/Värme: see Installationslager). Underlag: bildspelet (privat bilaga i vs-docs, ej i PDF:en) + tre äldre skisser (arkiv);
   de låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 (finns kvar i git-historiken – ägaren
   har beslutat 2026-10-18 att den får ligga kvar, ingen rensning).
 - **Bergvärmepump: inverterstyrd, 0–16 kW** (rättat 2026-10-04 från ~12 kW; budget 115 000 kr inkl. VVB). Borrdjup 200 m i

@@ -3,7 +3,7 @@ import { storage } from "../storage.js";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
 import { useSpace } from "../state.js";
-import { VENT_SYS, VENT_KINDS, VENT_TOPIC, ventSvg, ventPinsFor, ventQuestions, ventHit, ventColor, hasVent, LINE_W } from "./vent.js";
+import { LAYERS, LAYER_KEYS, kindDef, sysColor, instSvg, layerPins, layerQuestions, layerHit, ptRadius, LINE_W } from "./inst.js";
 import { buildPlanSvg, itemLabel, coveredItemIds, stairLines } from "./planSvg.js";
 import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, AREA_KINDS, fmtM2, regionAt, regionRects } from "./geom.js";
 
@@ -83,6 +83,9 @@ function axisLock(a, b) {
 // sessions can never collide — the old counter reset to 1000 each load and caused
 // two objects to share an id (moving one moved both).
 let _uc = 0;
+const emptyInst = () => Object.fromEntries(LAYER_KEYS.map((k) => [k, { lines: [], pts: [] }]));
+// plan-record fields of the installation layers (ventLines, ventPts, elLines …), only non-empty ones
+const instFields = (inst) => Object.fromEntries(LAYER_KEYS.flatMap((k) => [[k + "Lines", inst[k].lines], [k + "Pts", inst[k].pts]]).filter(([, v]) => v.length));
 const uid = (p) => p + Date.now().toString(36) + (_uc++).toString(36) + Math.random().toString(36).slice(2, 4);
 // Heal any existing duplicate ids on load.
 function dedupe(arr, prefix) {
@@ -160,13 +163,18 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   const [saveMeas, setSaveMeas] = useState(false); // when on, a completed measurement is saved as a dim
   const [areas, setAreas] = useState([]);       // room labels {id,x,y,name}; m² computed from the walls
   const mRefs = useRef({ a: null, b: null });   // anchors of the in-progress measurement's ends
-  // ventilation layer (see vent.js) + the project's ventilation questions pinned on this plan
-  const [ventLines, setVentLines] = useState([]);
-  const [ventPts, setVentPts] = useState([]);
-  const [showVent, setShowVent] = useState(() => { try { return localStorage.getItem("vs:v1:ui:vent") !== "0"; } catch { return true; } });
-  const [ventSys, setVentSys] = useState("F");
-  const [ventTool, setVentTool] = useState("valj"); // valj | kanal | pil | don | flakt | stam | aggregat | fraga
-  const [ventDraft, setVentDraft] = useState(null); // in-progress duct/arrow: { sys, pts, arrow }
+  // installation layers (see inst.js) + the project's questions pinned on this plan
+  const [inst, setInst] = useState(emptyInst);
+  // per device: which layers are drawn (key → false = hidden) and which one is edited
+  const [showInst, setShowInst] = useState(() => { try { return JSON.parse(localStorage.getItem("vs:v1:ui:inst") || "null") || (localStorage.getItem("vs:v1:ui:vent") === "0" ? { vent: false } : {}); } catch { return {}; } });
+  const [layer, setLayer] = useState(() => { try { const k = localStorage.getItem("vs:v1:ui:instLayer"); return LAYERS[k] ? k : "vent"; } catch { return "vent"; } });
+  const [instSys, setInstSys] = useState(null);
+  const [instTool, setInstTool] = useState("valj"); // valj | kanal | pil | fraga | a kind of the layer
+  const [instDraft, setInstDraft] = useState(null); // in-progress line: { sys, pts, arrow }
+  const LD = LAYERS[layer], cur = inst[layer];
+  const sysNow = LD.sys[instSys] ? instSys : LD.defSys;
+  const setPart = (part, fn, k = layer) => setInst((s) => ({ ...s, [k]: { ...s[k], [part]: fn(s[k][part]) } }));
+  const isShown = (k) => showInst[k] !== false;
   const [project, updateProject] = useSpace("project");
   const planId = storageKey.replace(/^.*plan:/, "");
   const [snapOn, setSnapOn] = useState(true);   // snap points to object/room/wall corners
@@ -200,8 +208,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     comments: comments.map((c) => ({ ...c })),
     dims: dims.map((d) => ({ ...d, a: [...d.a], b: [...d.b] })),
     areas: areas.map((a) => ({ ...a })),
-    ventLines: ventLines.map((l) => ({ ...l, pts: l.pts.map((q) => [...q]) })),
-    ventPts: ventPts.map((v) => ({ ...v })),
+    inst: JSON.parse(JSON.stringify(inst)),
     bg: bgT ? { ...bgT } : null,
   });
   const pushUndo = () => {
@@ -216,7 +223,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     setComments(s.comments || []);
     setDims(s.dims || []);
     setAreas(s.areas || []);
-    setVentLines(s.ventLines || []); setVentPts(s.ventPts || []);
+    if (s.inst) setInst(s.inst);
     if (s.bg !== undefined) setBgT(s.bg);
     setSel(null); setGroup([]); setUndoN(undoRef.current.length);
   };
@@ -230,8 +237,8 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     setComments(Array.isArray(s.comments) ? s.comments : []);
     setDims(Array.isArray(s.dims) ? s.dims : []);
     setAreas(Array.isArray(s.areas) ? s.areas : []);
-    setVentLines(Array.isArray(s.ventLines) ? s.ventLines : []);
-    setVentPts(Array.isArray(s.ventPts) ? s.ventPts : []);
+    const arr = (v) => (Array.isArray(v) ? v : []);
+    setInst(Object.fromEntries(LAYER_KEYS.map((k) => [k, { lines: arr(s[k + "Lines"]), pts: arr(s[k + "Pts"]) }])));
     setBgT(s.bg || null);
   }, []);
   useEffect(() => {
@@ -276,12 +283,12 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       try {
         // Dimension ends are stored resolved (anchors applied), so readers without the anchor logic stay right.
         const sd = resolveDims(dims, { room, walls, items, openings });
-        await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(sd.length ? { dims: sd } : {}), ...(areas.length ? { areas } : {}), ...(ventLines.length ? { ventLines } : {}), ...(ventPts.length ? { ventPts } : {}), ...(bgT ? { bg: bgT } : {}) }));
+        await storage.set(storageKey, JSON.stringify({ v: 2, room, openings, items, ...(walls.length ? { walls } : {}), ...(comments.length ? { comments } : {}), ...(sd.length ? { dims: sd } : {}), ...(areas.length ? { areas } : {}), ...instFields(inst), ...(bgT ? { bg: bgT } : {}) }));
         setStatus("Sparat");
       } catch (e) { setStatus("Kunde inte spara"); }
     }, 800);
     return () => clearTimeout(t);
-  }, [room, openings, items, walls, comments, dims, areas, ventLines, ventPts, bgT, storageKey]);
+  }, [room, openings, items, walls, comments, dims, areas, inst, bgT, storageKey]);
 
   // ---------- viewbox (zoom/pan aware) ----------
   const M = 480;
@@ -407,78 +414,87 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   };
 
   // ---------- pointer handlers ----------
-  // ---------- ventilation layer ----------
-  const ventPins = useMemo(() => ventPinsFor(project?.todos, planId), [project, planId]);
-  const [pinMove, setPinMove] = useState(null); // { id, idx, x, y } while a question marker is dragged
-  const pinsShown = pinMove ? ventPins.map((v) => (v.q.id === pinMove.id && v.idx === pinMove.idx ? { ...v, pin: { ...v.pin, x: pinMove.x, y: pinMove.y } } : v)) : ventPins;
-  const ventSnap = (p) => {
+  // ---------- installation layers ----------
+  const todosAll = project?.todos;
+  const pinsBy = useMemo(() => Object.fromEntries(LAYER_KEYS.map((k) => [k, layerPins(todosAll, k, planId)])), [todosAll, planId]);
+  const [pinMove, setPinMove] = useState(null); // { layer, id, idx, x, y } while a question marker is dragged
+  const pinsOf = (k) => (pinMove && pinMove.layer === k
+    ? pinsBy[k].map((v) => (v.q.id === pinMove.id && v.idx === pinMove.idx ? { ...v, pin: { ...v.pin, x: pinMove.x, y: pinMove.y } } : v)) : pinsBy[k]);
+  const layerHasContent = (k) => !!(inst[k].lines.length || inst[k].pts.length || pinsBy[k].length);
+  const instSnap = (p) => {
     let best = null;
-    for (const v of ventPts) { const d = Math.hypot(v.x - p.x, v.y - p.y); if (d < 260 && (!best || d < best.d)) best = { d, q: [v.x, v.y] }; }
-    for (const l of ventLines) for (const q of l.pts) { const d = Math.hypot(q[0] - p.x, q[1] - p.y); if (d < 160 && (!best || d < best.d)) best = { d, q: [q[0], q[1]] }; }
+    for (const v of cur.pts) { const d = Math.hypot(v.x - p.x, v.y - p.y); if (d < 260 && (!best || d < best.d)) best = { d, q: [v.x, v.y] }; }
+    for (const l of cur.lines) for (const q of l.pts) { const d = Math.hypot(q[0] - p.x, q[1] - p.y); if (d < 160 && (!best || d < best.d)) best = { d, q: [q[0], q[1]] }; }
     return best ? best.q : [snap(p.x), snap(p.y)];
   };
   const finishDraft = (d) => {
     if (d && d.pts.length >= 2) {
       pushUndo();
       const id = uid("vl");
-      setVentLines((a) => [...a, { id, sys: d.sys, pts: d.pts, ...(d.arrow ? { arrow: true } : {}) }]);
-      setSel({ kind: "vent", vk: "line", id });
+      setPart("lines", (a) => [...a, { id, sys: d.sys, pts: d.pts, ...(d.arrow ? { arrow: true } : {}) }]);
+      setSel({ kind: "inst", layer, vk: "line", id });
     }
-    setVentDraft(null);
+    setInstDraft(null);
   };
   const setTodos = (fn) => updateProject({ todos: fn(project?.todos || []) });
-  const onVentDown = (p) => {
-    if (ventTool === "valj") {
-      const h = ventHit({ ventLines, ventPts }, ventPins, p.x, p.y);
+  const onInstDown = (p) => {
+    if (instTool === "valj") {
+      const h = layerHit(layer, cur, pinsBy[layer], p.x, p.y);
       if (!h) return false;
       if (h.kind === "pt") {
-        const v = ventPts.find((x) => x.id === h.id);
-        setSel({ kind: "vent", vk: "pt", id: h.id });
-        dragRef.current = { kind: "ventpt", id: h.id, dx: p.x - v.x, dy: p.y - v.y, pre: takeSnap(), moved: false };
+        const v = cur.pts.find((x) => x.id === h.id);
+        setSel({ kind: "inst", layer, vk: "pt", id: h.id });
+        dragRef.current = { kind: "instpt", layer, id: h.id, dx: p.x - v.x, dy: p.y - v.y, pre: takeSnap(), moved: false };
       } else if (h.kind === "line") {
-        const l = ventLines.find((x) => x.id === h.id);
-        setSel({ kind: "vent", vk: "line", id: h.id });
+        const l = cur.lines.find((x) => x.id === h.id);
+        setSel({ kind: "inst", layer, vk: "line", id: h.id });
         dragRef.current = h.vertex >= 0
-          ? { kind: "ventvtx", id: h.id, idx: h.vertex, pre: takeSnap(), moved: false }
-          : { kind: "ventline", id: h.id, x0: p.x, y0: p.y, pts0: l.pts.map((q) => [...q]), pre: takeSnap(), moved: false };
+          ? { kind: "instvtx", layer, id: h.id, idx: h.vertex, pre: takeSnap(), moved: false }
+          : { kind: "instline", layer, id: h.id, x0: p.x, y0: p.y, pts0: l.pts.map((q) => [...q]), pre: takeSnap(), moved: false };
       } else {
-        setSel({ kind: "vent", vk: "pin", id: h.id, idx: h.idx });
-        dragRef.current = { kind: "ventpin", id: h.id, idx: h.idx, moved: false };
+        setSel({ kind: "inst", layer, vk: "pin", id: h.id, idx: h.idx });
+        dragRef.current = { kind: "instpin", layer, id: h.id, idx: h.idx, moved: false };
       }
       return true;
     }
-    if (ventTool === "kanal" || ventTool === "pil") {
-      const q = ventSnap(p), arrow = ventTool === "pil";
-      const d = ventDraft && !!ventDraft.arrow === arrow ? ventDraft : { sys: ventSys, pts: [], arrow };
+    if (instTool === "kanal" || instTool === "pil") {
+      const q = instSnap(p), arrow = instTool === "pil";
+      const d = instDraft && !!instDraft.arrow === arrow ? instDraft : { sys: sysNow, pts: [], arrow };
       const last = d.pts[d.pts.length - 1];
       if (last && Math.hypot(last[0] - q[0], last[1] - q[1]) < 1) { finishDraft(d); return true; } // tap the last point again = done
       const nd = { ...d, pts: [...d.pts, q] };
-      if (arrow && nd.pts.length === 2) finishDraft(nd); else setVentDraft(nd);
+      if (arrow && nd.pts.length === 2) finishDraft(nd); else setInstDraft(nd);
       return true;
     }
-    if (ventTool === "fraga") {
-      const t = prompt("Fråga till VVS (hamnar i Projekt → Att besluta / att göra):", "");
+    if (instTool === "fraga") {
+      const t = prompt(`Fråga till ${LD.who} (hamnar i Projekt → Att besluta / att göra):`, "");
       if (!t || !t.trim()) return true;
       const id = uid("q");
-      setTodos((ts) => [...ts, { id, area: VENT_TOPIC, item: t.trim(), detail: "", who: "VVS", due: "", status: "Öppen", pins: [{ plan: planId, x: snap(p.x), y: snap(p.y) }] }]);
-      setSel({ kind: "vent", vk: "pin", id, idx: 0 });
+      setTodos((ts) => [...ts, { id, area: LD.topics[0], item: t.trim(), detail: "", who: LD.who, due: "", status: "Öppen", pins: [{ plan: planId, x: snap(p.x), y: snap(p.y) }] }]);
+      setSel({ kind: "inst", layer, vk: "pin", id, idx: 0 });
       return true;
     }
-    // don | flakt | stam | aggregat
+    // a point of the layer's kinds
+    const d = kindDef(layer, instTool);
     let label;
-    if (ventTool === "stam") { label = prompt("Stammens namn:", ventSys === "S2B" ? "S2-B" : ventSys === "S2K" ? "S2-K" : "S1"); if (label === null) return true; }
-    if (ventTool === "aggregat") { label = prompt("Aggregat (kort text, t.ex. FL eller BV):", ventSys === "BV" ? "BV" : "FL"); if (label === null) return true; }
+    if (d.ask) { label = prompt(d.ask, d.def ? d.def(sysNow) : ""); if (label === null) return true; }
     pushUndo();
     const id = uid("vp");
-    const [x, y] = ventTool === "don" || ventTool === "flakt" ? [snap(p.x), snap(p.y)] : ventSnap(p);
-    setVentPts((a) => [...a, { id, sys: ventSys, kind: ventTool, x, y, ...(label ? { label: label.trim() } : {}), ...(ventTool === "aggregat" ? { w: 600, h: 600 } : {}) }]);
-    setSel({ kind: "vent", vk: "pt", id });
+    const [x, y] = d.shape === "square" || d.shape === "rect" ? instSnap(p) : [snap(p.x), snap(p.y)];
+    setPart("pts", (a) => [...a, { id, sys: sysNow, kind: instTool, x, y, ...(label ? { label: label.trim() } : {}),
+      ...(d.shape === "rect" || d.shape === "bar" ? { w: d.w || 600, h: d.h || 600 } : {}) }]);
+    setSel({ kind: "inst", layer, vk: "pt", id });
     return true;
   };
+  const pickLayer = (k) => {
+    setLayer(k); setInstSys(null); setInstTool("valj"); setInstDraft(null); setSel(null);
+    try { localStorage.setItem("vs:v1:ui:instLayer", k); } catch { /* ignore */ }
+  };
+  const toggleLayer = (k) => setShowInst((v) => { const n = { ...v, [k]: !isShown(k) }; try { localStorage.setItem("vs:v1:ui:inst", JSON.stringify(n)); } catch { /* ignore */ } return n; });
 
   const onCanvasDown = (e) => {
     const p = toSvg(e.clientX, e.clientY);
-    if (!readOnly && mode === "vent" && onVentDown(p)) return;
+    if (!readOnly && mode === "inst" && onInstDown(p)) return;
     // Calibrate the background: tap two points a known distance apart.
     if (calib) {
       const pts = [...calib.pts, [p.x, p.y]];
@@ -762,15 +778,15 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       }
     } else if (d.kind === "area") {
       setAreas((a) => a.map((r) => (r.id === d.id ? { ...r, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : r)));
-    } else if (d.kind === "ventpt") {
-      setVentPts((a) => a.map((v) => (v.id === d.id ? { ...v, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : v)));
-    } else if (d.kind === "ventvtx") {
-      setVentLines((a) => a.map((l) => (l.id === d.id ? { ...l, pts: l.pts.map((q, i) => (i === d.idx ? [snap(p.x), snap(p.y)] : q)) } : l)));
-    } else if (d.kind === "ventline") {
+    } else if (d.kind === "instpt") {
+      setPart("pts", (a) => a.map((v) => (v.id === d.id ? { ...v, x: snap(p.x - d.dx), y: snap(p.y - d.dy) } : v)), d.layer);
+    } else if (d.kind === "instvtx") {
+      setPart("lines", (a) => a.map((l) => (l.id === d.id ? { ...l, pts: l.pts.map((q, i) => (i === d.idx ? [snap(p.x), snap(p.y)] : q)) } : l)), d.layer);
+    } else if (d.kind === "instline") {
       const dx = snap(p.x - d.x0), dy = snap(p.y - d.y0);
-      setVentLines((a) => a.map((l) => (l.id === d.id ? { ...l, pts: d.pts0.map((q) => [q[0] + dx, q[1] + dy]) } : l)));
-    } else if (d.kind === "ventpin") {
-      setPinMove({ id: d.id, idx: d.idx, x: snap(p.x), y: snap(p.y) });
+      setPart("lines", (a) => a.map((l) => (l.id === d.id ? { ...l, pts: d.pts0.map((q) => [q[0] + dx, q[1] + dy]) } : l)), d.layer);
+    } else if (d.kind === "instpin") {
+      setPinMove({ layer: d.layer, id: d.id, idx: d.idx, x: snap(p.x), y: snap(p.y) });
     } else if (d.kind === "group") {
       // Move every grouped item together (furniture may cross/exit walls).
       setItems((a) => a.map((it) => {
@@ -840,7 +856,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
         dragRef.current = null;
         return;
       }
-      if (d.kind === "ventpin") {
+      if (d.kind === "instpin") {
         if (d.moved && pinMove) {
           const { id, idx, x, y } = pinMove;
           setTodos((ts) => ts.map((t) => (t.id === id ? { ...t, pins: (t.pins || []).map((q, i) => (i === idx ? { ...q, x, y } : q)) } : t)));
@@ -877,14 +893,14 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   const selCm = sel?.kind === "cm" ? comments.find((c) => c.id === sel.id) : null;
   const selDim = sel?.kind === "dim" ? liveDims.find((d) => d.id === sel.id) : null;
   const selArea = sel?.kind === "area" ? areas.find((a) => a.id === sel.id) : null;
-  const selVent = sel?.kind !== "vent" ? null
-    : sel.vk === "pt" ? (() => { const o = ventPts.find((v) => v.id === sel.id); return o ? { vk: "pt", o } : null; })()
-    : sel.vk === "line" ? (() => { const o = ventLines.find((v) => v.id === sel.id); return o ? { vk: "line", o } : null; })()
-    : (() => { const o = ventQuestions(project?.todos).find((q) => q.id === sel.id); return o ? { vk: "pin", o, idx: sel.idx } : null; })();
-  const updVent = (fn) => {
+  const selInst = sel?.kind !== "inst" || !inst[sel.layer] ? null
+    : sel.vk === "pt" ? (() => { const o = inst[sel.layer].pts.find((v) => v.id === sel.id); return o ? { layer: sel.layer, vk: "pt", o } : null; })()
+    : sel.vk === "line" ? (() => { const o = inst[sel.layer].lines.find((v) => v.id === sel.id); return o ? { layer: sel.layer, vk: "line", o } : null; })()
+    : (() => { const o = layerQuestions(todosAll, sel.layer).find((q) => q.id === sel.id); return o ? { layer: sel.layer, vk: "pin", o, idx: sel.idx } : null; })();
+  const updInst = (fn) => {
     pushUndo();
-    if (selVent?.vk === "pt") setVentPts((a) => a.map((v) => (v.id === sel.id ? fn(v) : v)));
-    if (selVent?.vk === "line") setVentLines((a) => a.map((v) => (v.id === sel.id ? fn(v) : v)));
+    if (selInst?.vk === "pt") setPart("pts", (a) => a.map((v) => (v.id === sel.id ? fn(v) : v)), selInst.layer);
+    if (selInst?.vk === "line") setPart("lines", (a) => a.map((v) => (v.id === sel.id ? fn(v) : v)), selInst.layer);
   };
   const areaOf = (ar) => (summary ? summary.byArea[ar.id] : null);
   const commentNumber = (id) => comments.findIndex((c) => c.id === id) + 1;
@@ -899,8 +915,8 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
     if (selCm) { if (selCm.photoPath) deletePhoto(selCm.photoPath); setComments((a) => a.filter((c) => c.id !== sel.id)); }
     if (selDim) setDims((a) => a.filter((d) => d.id !== sel.id));
     if (selArea) setAreas((a) => a.filter((r) => r.id !== sel.id));
-    if (selVent?.vk === "pt") setVentPts((a) => a.filter((v) => v.id !== sel.id));
-    if (selVent?.vk === "line") setVentLines((a) => a.filter((v) => v.id !== sel.id));
+    if (selInst?.vk === "pt") setPart("pts", (a) => a.filter((v) => v.id !== sel.id), selInst.layer);
+    if (selInst?.vk === "line") setPart("lines", (a) => a.filter((v) => v.id !== sel.id), selInst.layer);
     setSel(null);
   };
   const renameSel = () => {
@@ -978,7 +994,8 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       // in focus mode: the crop of the floor plan, with the room's own comments/objects
       const { pdfPlanArgs } = await import("../floorRooms.js");
       const pa = pdfPlanArgs({ plan: focused ? "floor" : null, areas: focus }, { room, openings, items, walls, comments, dims, areas });
-      if (showVent && (hasVent({ ventLines, ventPts }) || ventPins.length)) pa.svg.vent = { ventLines, ventPts, pins: ventPins };
+      const lays = LAYER_KEYS.filter((k) => isShown(k) && layerHasContent(k));
+      if (lays.length) pa.svg.inst = { layers: lays.map((k) => ({ key: k, ...inst[k], pins: pinsBy[k] })) };
       const svgString = buildPlanSvg(pa.svg);
       const roomId = spaceId || storageKey.replace(/^.*plan:/, "");
       const { loadRoomPdfData } = await import("../state.js");
@@ -1258,10 +1275,10 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
             <button style={{ ...(focusOn ? btn : btnOn), whiteSpace: "nowrap" }} onClick={() => { setFocusOn((f) => !f); setView(null); }}
               title={focusOn ? "Visa hela planet" : "Visa bara rummet"}>▣<span className="pl-lbl">{focusOn ? " Hela planet" : " Bara rummet"}</span></button>
           )}
-          {(hasVent({ ventLines, ventPts }) || ventPins.length > 0) && mode !== "vent" && (
-            <button style={{ ...(showVent ? btnOn : btn), whiteSpace: "nowrap" }} title={showVent ? "Dölj ventilationen" : "Visa ventilationen"}
-              onClick={() => setShowVent((v) => { try { localStorage.setItem("vs:v1:ui:vent", v ? "0" : "1"); } catch { /* ignore */ } return !v; })}>🌬<span className="pl-lbl"> Ventilation</span></button>
-          )}
+          {LAYER_KEYS.filter((k) => layerHasContent(k) && !(mode === "inst" && k === layer)).map((k) => (
+            <button key={k} style={{ ...(isShown(k) ? btnOn : btn), whiteSpace: "nowrap" }} title={(isShown(k) ? "Dölj " : "Visa ") + LAYERS[k].label.toLowerCase()}
+              onClick={() => toggleLayer(k)}>{LAYERS[k].icon}<span className="pl-lbl"> {LAYERS[k].label}</span></button>
+          ))}
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={printPlan} title="PDF">⬇<span className="pl-lbl"> PDF</span></button>
           <button style={{ ...btn, whiteSpace: "nowrap" }} onClick={() => setFull((f) => !f)}>
             {full ? "✕" : "⤢"}<span className="pl-lbl">{full ? " Stäng" : " Helskärm"}</span>
@@ -1278,7 +1295,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
         {modeBtn("mat", "📏 Mät")}
         {modeBtn("ytor", "▦ Ytor m²")}
         {modeBtn("kommentar", "💬 Kommentar")}
-        {modeBtn("vent", "🌬 Rita ventilation")}
+        {modeBtn("inst", "🔧 Installationer")}
         {modeBtn("bakgrund", "🖼 Bakgrund")}
       </div>
       )}
@@ -1325,25 +1342,30 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
         </div>
       )}
 
-      {!readOnly && !full && mode === "vent" && (
+      {!readOnly && !full && mode === "inst" && (
         <div className="pl-bar" style={{ display: "flex", gap: 8, padding: "8px 16px", alignItems: "center", flexWrap: "wrap" }}>
-          {[["valj", "Välj / flytta"], ["kanal", "Kanal"], ["pil", "Luftpil"], ["don", "Don"], ["flakt", "Takfläkt"], ["stam", "Stam"], ["aggregat", "Aggregat"], ["fraga", "❓ Fråga till VVS"]].map(([k, l]) => (
-            <button key={k} style={ventTool === k ? btnOn : btn} onClick={() => { setVentTool(k); setVentDraft(null); }}>{l}</button>
+          <select value={layer} onChange={(e) => pickLayer(e.target.value)} style={{ ...btn, padding: "7px 8px", fontWeight: 600 }} title="Vilket lager som ritas">
+            {LAYER_KEYS.map((k) => <option key={k} value={k}>{LAYERS[k].icon} {LAYERS[k].label}</option>)}
+          </select>
+          {[["valj", "Välj / flytta"], ...LD.lines, ...LD.kinds.map((d) => [d.k, d.label]), ["fraga", `❓ Fråga till ${LD.who}`]].map(([k, l]) => (
+            <button key={k} style={instTool === k ? btnOn : btn}
+              onClick={() => { setInstTool(k); setInstDraft(null); const d = LD.kinds.find((x) => x.k === k); if (d?.sys) setInstSys(d.sys); }}>{l}</button>
           ))}
-          {ventDraft && <button style={{ ...btnOn, background: blue, borderColor: blue }} onClick={() => finishDraft(ventDraft)}>✓ Klar</button>}
-          {ventDraft && <button style={btn} onClick={() => setVentDraft(null)}>Avbryt</button>}
+          {instDraft && <button style={{ ...btnOn, background: blue, borderColor: blue }} onClick={() => finishDraft(instDraft)}>✓ Klar</button>}
+          {instDraft && <button style={btn} onClick={() => setInstDraft(null)}>Avbryt</button>}
         </div>
       )}
-      {!readOnly && !full && mode === "vent" && ventTool !== "valj" && ventTool !== "fraga" && (
+      {!readOnly && !full && mode === "inst" && instTool !== "valj" && instTool !== "fraga" && (
         <div className="pl-bar" style={{ display: "flex", gap: 6, padding: "0 16px 8px", alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "#7A756E" }}>System:</span>
-          {Object.entries(VENT_SYS).map(([k, d]) => (
-            <button key={k} style={{ ...btn, padding: "6px 10px", fontSize: 12, ...(ventSys === k ? { background: d.color, color: "#fff", borderColor: d.color } : { borderColor: d.color, color: d.color }) }}
-              onClick={() => { setVentSys(k); setVentDraft((dr) => (dr ? { ...dr, sys: k } : dr)); }}>{d.label}</button>
+          {Object.entries(LD.sys).map(([k, d]) => (
+            <button key={k} style={{ ...btn, padding: "6px 10px", fontSize: 12, ...(sysNow === k ? { background: d.color, color: "#fff", borderColor: d.color } : { borderColor: d.color, color: d.color }) }}
+              onClick={() => { setInstSys(k); setInstDraft((dr) => (dr ? { ...dr, sys: k } : dr)); }}>{d.label}</button>
           ))}
           <span className="pl-hint" style={{ fontSize: 12, color: "#7A756E" }}>
-            {ventTool === "kanal" ? "Tryck punkt för punkt, ✓ Klar (eller tryck sista punkten igen). Punkter fäster mot stammar och don."
-              : ventTool === "pil" ? "Två tryck: varifrån luften kommer → vart den går."
+            {instTool === "kanal" ? "Tryck punkt för punkt, ✓ Klar (eller tryck sista punkten igen). Punkter fäster mot lagrets andra punkter."
+              : instTool === "pil" ? (LD.pilHint || "Två tryck: från → till.")
+              : kindDef(layer, instTool).shape === "zone" ? "Tryck i rummet – hela rummet färgas och får sin yta."
               : "Tryck där den ska sitta."}
           </span>
         </div>
@@ -1654,23 +1676,29 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
           })}
           </g>
 
-          {/* ventilation layer (dims the building while editing it) */}
-          {(mode === "vent" || (showVent && (ventLines.length || ventPts.length || pinsShown.length))) ? (
-            <g style={{ pointerEvents: "none" }}>
-              {mode === "vent" && <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill={paper} opacity="0.45" />}
-              <g dangerouslySetInnerHTML={{ __html: ventSvg({ ventLines, ventPts }, pinsShown) }} />
-              {ventDraft && ventDraft.pts.length > 0 && (
-                <polyline points={ventDraft.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={ventColor(ventDraft.sys)} strokeWidth={LINE_W} strokeDasharray="90 60" />
-              )}
-              {ventDraft && ventDraft.pts.map((q, i) => <circle key={i} cx={q[0]} cy={q[1]} r="60" fill={ventColor(ventDraft.sys)} />)}
-              {selVent?.vk === "pt" && <circle cx={selVent.o.x} cy={selVent.o.y} r={selVent.o.kind === "aggregat" ? Math.max(selVent.o.w || 600, selVent.o.h || 600) * 0.75 : 260} fill="none" stroke={blue} strokeWidth="30" strokeDasharray="70 45" />}
-              {selVent?.vk === "line" && <>
-                <polyline points={selVent.o.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={blue} strokeWidth={LINE_W + 90} opacity="0.3" strokeLinejoin="round" />
-                {selVent.o.pts.map((q, i) => <rect key={i} x={q[0] - 70} y={q[1] - 70} width="140" height="140" fill="#fff" stroke={blue} strokeWidth="22" />)}
-              </>}
-              {selVent?.vk === "pin" && (() => { const pin = pinsShown.find((v) => v.q.id === selVent.o.id && v.idx === selVent.idx)?.pin; return pin ? <circle cx={pin.x} cy={pin.y} r="290" fill="none" stroke={blue} strokeWidth="30" strokeDasharray="70 45" /> : null; })()}
-            </g>
-          ) : null}
+          {/* installation layers (the building is dimmed while editing one; the other shown layers are faded) */}
+          {(() => {
+            const vis = LAYER_KEYS.filter((k) => (mode === "inst" && k === layer) || (isShown(k) && layerHasContent(k)));
+            if (!vis.length) return null;
+            const order = mode === "inst" ? [...vis.filter((k) => k !== layer), layer] : vis;
+            const selPin = selInst?.vk === "pin" ? pinsOf(selInst.layer).find((v) => v.q.id === selInst.o.id && v.idx === selInst.idx)?.pin : null;
+            return (
+              <g style={{ pointerEvents: "none" }}>
+                {mode === "inst" && <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill={paper} opacity="0.45" />}
+                <g dangerouslySetInnerHTML={{ __html: instSvg(order.map((k) => ({ key: k, ...inst[k], pins: pinsOf(k), faded: mode === "inst" && k !== layer })), grid) }} />
+                {instDraft && instDraft.pts.length > 0 && (
+                  <polyline points={instDraft.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={sysColor(layer, instDraft.sys)} strokeWidth={LINE_W} strokeDasharray="90 60" />
+                )}
+                {instDraft && instDraft.pts.map((q, i) => <circle key={i} cx={q[0]} cy={q[1]} r="60" fill={sysColor(layer, instDraft.sys)} />)}
+                {selInst?.vk === "pt" && <circle cx={selInst.o.x} cy={selInst.o.y} r={Math.max(260, ptRadius(selInst.layer, selInst.o) * 1.5)} fill="none" stroke={blue} strokeWidth="30" strokeDasharray="70 45" />}
+                {selInst?.vk === "line" && <>
+                  <polyline points={selInst.o.pts.map((q) => q.join(",")).join(" ")} fill="none" stroke={blue} strokeWidth={LINE_W + 90} opacity="0.3" strokeLinejoin="round" />
+                  {selInst.o.pts.map((q, i) => <rect key={i} x={q[0] - 70} y={q[1] - 70} width="140" height="140" fill="#fff" stroke={blue} strokeWidth="22" />)}
+                </>}
+                {selPin && <circle cx={selPin.x} cy={selPin.y} r="320" fill="none" stroke={blue} strokeWidth="30" strokeDasharray="70 45" />}
+              </g>
+            );
+          })()}
 
           {/* focus: dim everything but the focused rooms and their walls */}
           {focused && (
@@ -1780,12 +1808,12 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
               </g>
             );
           })}
-          {/* in ventilation mode every tap goes to the layer (nothing underneath – comments, objects – steals it) */}
-          {!readOnly && mode === "vent" && <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill="transparent" />}
+          {/* in installation mode every tap goes to the layer (nothing underneath – comments, objects – steals it) */}
+          {!readOnly && mode === "inst" && <rect x={BASE.x - 1e5} y={BASE.y - 1e5} width={BASE.w + 2e5} height={BASE.h + 2e5} fill="transparent" />}
         </svg>
 
         {/* selection controls — absolute overlay so selecting never reflows/rescales the canvas */}
-        {!readOnly && (selOp || selIt || selCm || selDim || selArea || selVent) && (
+        {!readOnly && (selOp || selIt || selCm || selDim || selArea || selInst) && (
           <div style={{ position: "absolute", left: 8, right: 8, bottom: 8, background: "#fff", border: `1.5px solid ${ink}`, borderRadius: 10, padding: "8px 12px", paddingBottom: "calc(8px + env(safe-area-inset-bottom))", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", boxShadow: "0 4px 16px rgba(0,0,0,0.14)", zIndex: 3 }}>
           {selOp && (
             <>
@@ -1843,42 +1871,46 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
             </>
           )}
-          {selVent && selVent.vk !== "pin" && (
-            <>
-              <div style={{ fontWeight: 600 }}>🌬 {selVent.vk === "line" ? (selVent.o.arrow ? "Luftpil" : "Kanal") : (VENT_KINDS.find(([k]) => k === selVent.o.kind) || [, "Punkt"])[1]}{selVent.o.label ? " " + selVent.o.label : ""}</div>
-              <select value={selVent.o.sys} onChange={(e) => { const sys = e.target.value; updVent((v) => ({ ...v, sys })); }} style={{ ...btn, padding: "7px 8px", color: ventColor(selVent.o.sys) }}>
-                {Object.entries(VENT_SYS).map(([k, d]) => <option key={k} value={k}>{d.label}</option>)}
+          {selInst && selInst.vk !== "pin" && (() => {
+            const k = selInst.layer, L = LAYERS[k], o = selInst.o, pt = selInst.vk === "pt", d = pt ? kindDef(k, o.kind) : null;
+            const sized = pt && (d.shape === "rect" || d.shape === "bar"), ow = o.w || d?.w || 600, oh = o.h || d?.h || 600;
+            return <>
+              <div style={{ fontWeight: 600 }}>{L.icon} {pt ? d.label : o.arrow ? "Pil" : L.lines[0][1]}{o.label ? " " + o.label : ""}</div>
+              <select value={o.sys} onChange={(e) => { const sys = e.target.value; updInst((v) => ({ ...v, sys })); }} style={{ ...btn, padding: "7px 8px", color: sysColor(k, o.sys) }}>
+                {Object.entries(L.sys).map(([sk, sd]) => <option key={sk} value={sk}>{sd.label}</option>)}
               </select>
-              {selVent.vk === "pt" && (selVent.o.kind === "stam" || selVent.o.kind === "aggregat") && (
-                <button style={btn} onClick={() => { const n = prompt("Text:", selVent.o.label || ""); if (n !== null) updVent((v) => ({ ...v, label: n.trim() })); }}>✎ Text</button>
+              {pt && (d.ask || d.relabel || d.shape === "bar") && (
+                <button style={btn} onClick={() => { const n = prompt(d.relabel || d.ask || "Text:", o.label || d.sym || ""); if (n !== null) updInst((v) => { const r = { ...v }; if (n.trim()) r.label = n.trim(); else delete r.label; return r; }); }}>✎ Text</button>
               )}
-              {selVent.vk === "pt" && selVent.o.kind === "stam" && (
-                <button style={btn} onClick={() => updVent((v) => { const o = { ...v }; if (o.lside === -1) delete o.lside; else o.lside = -1; return o; })}>⇄ Text vänster/höger</button>
+              {pt && d.shape === "square" && (
+                <button style={btn} onClick={() => updInst((v) => { const r = { ...v }; if (r.lside === -1) delete r.lside; else r.lside = -1; return r; })}>⇄ Text vänster/höger</button>
               )}
-              {selVent.vk === "pt" && (selVent.o.kind === "don" || selVent.o.kind === "flakt") && (
-                <button style={btn} onClick={() => { const n = prompt("Flöde (l/s, tomt = inget):", selVent.o.flow || ""); if (n !== null) updVent((v) => { const f = n.trim().replace(",", "."); const o = { ...v }; if (f) o.flow = f; else delete o.flow; return o; }); }}>{selVent.o.flow ? selVent.o.flow + " l/s" : "l/s"}</button>
+              {pt && d.unit && (
+                <button style={btn} onClick={() => { const n = prompt(`Värde (${d.unit}, tomt = inget):`, o.flow || ""); if (n !== null) updInst((v) => { const f = n.trim().replace(",", "."); const r = { ...v }; if (f) r.flow = f; else delete r.flow; return r; }); }}>{o.flow ? o.flow + " " + d.unit : d.unit}</button>
               )}
-              {selVent.vk === "pt" && selVent.o.kind === "aggregat" && <>
-                <button style={btn} onClick={() => updVent((v) => ({ ...v, w: Math.max(200, (v.w || 600) - 100) }))}>B −</button>
-                <button style={btn} onClick={() => updVent((v) => ({ ...v, w: (v.w || 600) + 100 }))}>B +</button>
-                <button style={btn} onClick={() => updVent((v) => ({ ...v, h: Math.max(200, (v.h || 600) - 100) }))}>D −</button>
-                <button style={btn} onClick={() => updVent((v) => ({ ...v, h: (v.h || 600) + 100 }))}>D +</button>
+              {sized && <>
+                <button style={btn} onClick={() => updInst((v) => ({ ...v, w: Math.max(100, ow - 100) }))}>B −</button>
+                <button style={btn} onClick={() => updInst((v) => ({ ...v, w: ow + 100 }))}>B +</button>
+                <button style={btn} onClick={() => updInst((v) => ({ ...v, h: Math.max(100, oh - 100) }))}>D −</button>
+                <button style={btn} onClick={() => updInst((v) => ({ ...v, h: oh + 100 }))}>D +</button>
+                <button style={btn} onClick={() => updInst((v) => ({ ...v, w: oh, h: ow }))}>⟳ 90°</button>
               </>}
-              {selVent.vk === "line" && <button style={selVent.o.arrow ? btnOn : btn} onClick={() => updVent((v) => { const o = { ...v }; if (o.arrow) delete o.arrow; else o.arrow = true; return o; })}>➜ Pil</button>}
-              {selVent.vk === "line" && <button style={btn} onClick={() => updVent((v) => ({ ...v, pts: [...v.pts].reverse() }))}>⇄ Vänd</button>}
+              {!pt && <button style={o.arrow ? btnOn : btn} onClick={() => updInst((v) => { const r = { ...v }; if (r.arrow) delete r.arrow; else r.arrow = true; return r; })}>➜ Pil</button>}
+              {!pt && <button style={btn} onClick={() => updInst((v) => ({ ...v, pts: [...v.pts].reverse() }))}>⇄ Vänd</button>}
+              {pt && <button style={btn} onClick={() => { pushUndo(); const id = uid("vp"); setPart("pts", (a) => [...a, { ...o, id, x: o.x + 300, y: o.y + 300 }], k); setSel({ kind: "inst", layer: k, vk: "pt", id }); }}>Kopiera</button>}
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
-            </>
-          )}
-          {selVent && selVent.vk === "pin" && (
+            </>;
+          })()}
+          {selInst && selInst.vk === "pin" && (
             <>
-              <div style={{ fontWeight: 600, maxWidth: 420 }}>❓ V{selVent.o.vnum} <span style={{ fontWeight: 400 }}>{selVent.o.item}</span></div>
-              <button style={btn} onClick={() => { const n = prompt("Frågan:", selVent.o.item || ""); if (n !== null && n.trim()) setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, item: n.trim() } : t))); }}>✎ Text</button>
-              <button style={btn} onClick={() => { const n = prompt("Svar / detaljer:", selVent.o.detail || ""); if (n !== null) setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, detail: n } : t))); }}>✎ Svar</button>
-              <select value={selVent.o.status || "Öppen"} onChange={(e) => { const st = e.target.value; setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, status: st } : t))); }} style={{ ...btn, padding: "7px 8px" }}>
+              <div style={{ fontWeight: 600, maxWidth: 420 }}>❓ {selInst.o.tag} <span style={{ fontWeight: 400 }}>{selInst.o.item}</span></div>
+              <button style={btn} onClick={() => { const n = prompt("Frågan:", selInst.o.item || ""); if (n !== null && n.trim()) setTodos((ts) => ts.map((t) => (t.id === selInst.o.id ? { ...t, item: n.trim() } : t))); }}>✎ Text</button>
+              <button style={btn} onClick={() => { const n = prompt("Svar / detaljer:", selInst.o.detail || ""); if (n !== null) setTodos((ts) => ts.map((t) => (t.id === selInst.o.id ? { ...t, detail: n } : t))); }}>✎ Svar</button>
+              <select value={selInst.o.status || "Öppen"} onChange={(e) => { const st = e.target.value; setTodos((ts) => ts.map((t) => (t.id === selInst.o.id ? { ...t, status: st } : t))); }} style={{ ...btn, padding: "7px 8px" }}>
                 {["Öppen", "Pågår", "Klar"].map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
-              <button style={btn} onClick={() => { setTodos((ts) => ts.map((t) => (t.id === selVent.o.id ? { ...t, pins: (t.pins || []).filter((_, i) => i !== selVent.idx) } : t))); setSel(null); }}>Ta bort markören</button>
-              <button style={{ ...btn, color: red, borderColor: red }} onClick={() => { if (confirm("Ta bort frågan helt (även från Projekt)?")) { setTodos((ts) => ts.filter((t) => t.id !== selVent.o.id)); setSel(null); } }}>Ta bort frågan</button>
+              <button style={btn} onClick={() => { setTodos((ts) => ts.map((t) => (t.id === selInst.o.id ? { ...t, pins: (t.pins || []).filter((_, i) => i !== selInst.idx) } : t))); setSel(null); }}>Ta bort markören</button>
+              <button style={{ ...btn, color: red, borderColor: red }} onClick={() => { if (confirm("Ta bort frågan helt (även från Projekt)?")) { setTodos((ts) => ts.filter((t) => t.id !== selInst.o.id)); setSel(null); } }}>Ta bort frågan</button>
             </>
           )}
           {selArea && (

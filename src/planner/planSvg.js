@@ -2,7 +2,7 @@
 // be rendered without mounting the interactive RoomPlanner. Mirrors the planner's
 // on-screen drawing (walls, openings, furniture, numbered comment markers) minus
 // all interaction/selection chrome.
-import { ventSvg } from "./vent.js";
+import { instSvg } from "./inst.js";
 import { resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, fmtM2 } from "./geom.js";
 
 const WALL = 200;
@@ -155,7 +155,7 @@ export function coveredItemIds(items) {
 
 // Build a standalone SVG string for a plan (mm units). `bgImg` = {dataUrl,w,h}, `bgT` = transform.
 export function buildPlanSvg({ room, openings = [], items = [], walls = [], comments = [], dims = [], areas = [], bgImg = null, bgT = null, embedBg = true, focus = null,
-  vent = null /* { ventLines, ventPts, pins, dim } – draw the ventilation layer on top */ }) {
+  inst = null /* { layers:[{ key, lines, pts, pins, faded? }], dim } – installation layers on top (inst.js) */ }) {
   if (!room) room = { w: 3500, l: 6430 };
   let bx0 = -WALL, by0 = -WALL, bx1 = room.w + WALL, by1 = room.l + WALL;
   for (const it of items) {
@@ -253,10 +253,10 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
     if (pl.leader) s += `<line x1="${pl.ax}" y1="${pl.ay}" x2="${pl.cx}" y2="${pl.cy}" stroke="${ink}" stroke-width="8" opacity="0.5"/>`;
     if (label) s += `<text x="${pl.cx}" y="${pl.cy + pl.fs * 0.34}" text-anchor="middle" font-size="${pl.fs}" fill="${ink}" font-family="'Avenir Next','Helvetica Neue',Arial,sans-serif"${rot}>${esc(label)}</text>`;
   }
-  if (vent) {
-    // the building is toned down so the ventilation reads first
-    if (vent.dim !== false) s += `<rect x="${VB.x}" y="${VB.y}" width="${VB.w}" height="${VB.h}" fill="${paper}" opacity="0.45"/>`;
-    s += ventSvg(vent, vent.pins || []);
+  if (inst?.layers?.length) {
+    // the building is toned down so the installations read first
+    if (inst.dim !== false) s += `<rect x="${VB.x}" y="${VB.y}" width="${VB.w}" height="${VB.h}" fill="${paper}" opacity="0.45"/>`;
+    s += instSvg(inst.layers, areaGrid(room, walls));
   }
   if (focus?.length) {
     const big = `x="${VB.x - 1e5}" y="${VB.y - 1e5}" width="${VB.w + 2e5}" height="${VB.h + 2e5}"`;

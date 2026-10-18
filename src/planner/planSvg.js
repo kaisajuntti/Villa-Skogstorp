@@ -70,6 +70,17 @@ function openingEls(o, room, walls) {
     const m2 = pt(g.A, g.along, o.pos + o.len, g.inward, emid);
     s += `<line x1="${c1[0]}" y1="${c1[1]}" x2="${m2[0]}" y2="${m2[1]}" stroke="${ink}" stroke-width="70" stroke-linecap="butt"/>`;
     s += `<line x1="${c1[0]}" y1="${c1[1]}" x2="${m2[0]}" y2="${m2[1]}" stroke="${paper}" stroke-width="22" stroke-linecap="butt"/>`;
+  } else if (o.kind === "skjut") {
+    // sliding door: jambs, leaf along one face (solid) and its open position (dashed); see RoomPlanner
+    for (const p of [o.pos, o.pos + o.len]) {
+      const q0 = pt(g.A, g.along, p, g.inward, g.e0), q1 = pt(g.A, g.along, p, g.inward, g.e1);
+      s += `<line x1="${q0[0]}" y1="${q0[1]}" x2="${q1[0]}" y2="${q1[1]}" stroke="${ink}" stroke-width="16"/>`;
+    }
+    const e = o.ficka ? (g.e0 + g.e1) / 2 : o.out ? g.e0 - 30 : g.e1 + 30, sh = o.flip ? -o.len : o.len;
+    const l0 = pt(g.A, g.along, o.pos, g.inward, e), l1 = pt(g.A, g.along, o.pos + o.len, g.inward, e);
+    const m0 = pt(g.A, g.along, o.pos + sh, g.inward, e), m1 = pt(g.A, g.along, o.pos + o.len + sh, g.inward, e);
+    s += `<line x1="${l0[0]}" y1="${l0[1]}" x2="${l1[0]}" y2="${l1[1]}" stroke="${ink}" stroke-width="40" stroke-linecap="butt"/>`;
+    s += `<line x1="${m0[0]}" y1="${m0[1]}" x2="${m1[0]}" y2="${m1[1]}" stroke="${o.ficka ? paper : ink}" stroke-width="14" stroke-dasharray="40 30"/>`;
   } else if (o.kind === "oppning") {
     const a0 = pt(g.A, g.along, o.pos, g.inward, g.e0), a1 = pt(g.A, g.along, o.pos, g.inward, g.e1);
     const b0 = pt(g.A, g.along, o.pos + o.len, g.inward, g.e0), b1 = pt(g.A, g.along, o.pos + o.len, g.inward, g.e1);
@@ -92,6 +103,19 @@ function openingEls(o, room, walls) {
     }
   }
   return s;
+}
+
+// A stair object (it.stair = { steps, rev }): tread lines across the run (the longer side) and an
+// arrow pointing up the stair – towards the start of the run, or its end when `rev`.
+export function stairLines(it) {
+  const alongX = it.w >= it.h, L = alongX ? it.w : it.h, W = alongX ? it.h : it.w;
+  const n = Math.max(2, it.stair?.steps || Math.round(L / 250));
+  const P = (t, s) => (alongX ? [it.x + t, it.y + s] : [it.x + s, it.y + t]);
+  const treads = [];
+  for (let i = 1; i < n; i++) { const t = (L * i) / n; treads.push([P(t, 0), P(t, W)]); }
+  const s = W * 0.3, from = it.stair?.rev ? 120 : L - 120, to = it.stair?.rev ? L - 120 : 120, d = Math.sign(to - from), hl = Math.min(220, W * 0.35);
+  const tip = P(to, s);
+  return { treads, arrow: [P(from, s), tip], head: [tip, P(to - d * hl, s - hl * 0.55), P(to - d * hl, s + hl * 0.55)] };
 }
 
 // Where to draw an item's label. Default: centred, oriented along the longer side, sized
@@ -208,7 +232,15 @@ export function buildPlanSvg({ room, openings = [], items = [], walls = [], comm
       s += `<text x="${legendAt[0]}" y="${legendAt[1] + i * LEGEND_STEP + 280}" font-size="${l.big ? 300 : 190}" font-weight="${l.big ? 700 : 400}" fill="${l.big ? ink : "#7A756E"}" font-family="${l.big ? "'Avenir Next','Helvetica Neue',Arial,sans-serif" : mono}">${esc(l.t)}</text>`;
     });
   }
-  for (const it of items) s += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${cab}" stroke="${ink}" stroke-width="14"/>`;
+  for (const it of items) {
+    s += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="${it.stair ? paper : cab}" stroke="${ink}" stroke-width="14"/>`;
+    if (it.stair) {
+      const st = stairLines(it);
+      for (const [a, b] of st.treads) s += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${ink}" stroke-width="10"/>`;
+      s += `<line x1="${st.arrow[0][0]}" y1="${st.arrow[0][1]}" x2="${st.arrow[1][0]}" y2="${st.arrow[1][1]}" stroke="${ink}" stroke-width="14"/>`;
+      s += `<polygon points="${st.head.map((q) => q.join(",")).join(" ")}" fill="${ink}"/>`;
+    }
+  }
   const covered = coveredItemIds(items);
   for (const it of items) if (covered.has(it.id))
     s += `<rect x="${it.x}" y="${it.y}" width="${it.w}" height="${it.h}" fill="none" stroke="${ink}" stroke-width="10" stroke-dasharray="55 40" opacity="0.65"/>`;

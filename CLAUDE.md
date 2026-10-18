@@ -268,10 +268,16 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   (posts 8000–8168, 9098–9266; was one 3,15 m "oppning"), duplicate pardörr on the owner's entré→vardagsrum oppning
   removed, kitchen wall o42 60 mm stub trimmed, P2 door to RUM (was oppning), 14 objects moved flush to the exact wall
   faces (P2 S bed was 40 mm into the wall, kitchen sittbänk 110 mm), labels de-cluttered (`declutter.mjs`).
-  Open questions to the owner: allrum S window 7010–8164 (architect: window, owner deleted the opening → wall now);
-  bastu has no door (glass wall ends 36 cm from KPR); kitchen E window 11950–13098 has the architect's inner lining
-  across it; källare "valvöppning" vs "ingen valvöppning behövs" (door in the new Exakt wall?); arbetsrum→vardagsrum
-  is a skjutdörr in the drawing (drawn as oppning); stairs are not drawn on any floor.
+  Owner answers (2026-10-18): allrum S 7010–8164 = **wall**; bastu door = the diagonal glass wall (fine as drawn); kitchen E
+  window stays (the insulation is *under* the window); källare valvöppning → **ordinary door** (`a6-ox1` dorr, swings into
+  the befintliga källaren); **skjutdörrar**: arbetsrum→vardagsrum (`a28-ox1`, parks north on the arbetsrum side – kamin on the
+  other side), master bathroom (`w23-…`) and master bedroom (`w29-skjut`, w29 extended to wMW1, sep s3 removed) as
+  **fickdörrar** (garderober/säng flush on both sides); **stairs drawn** on all floors (items `trappa-k/p1/p2`).
+  Opening kind **`skjut`** (Skjutdörr): jambs + leaf along a wall face (solid) + open position (dashed); `flip` = slides the
+  other way, `out` = other face, `ficka` = pocket (leaf inside the wall, parked position dashed in paper colour). The opening
+  selection bar now has a **type select** (change any opening's kind). Item **`stair: { steps, rev }`** = stair object: treads
+  across the longer side + arrow pointing up (towards the start of the run, or the end when `rev`); `stairLines()` in
+  planSvg.js; palette "TRAPPA"; selection bar ⇄ Upp åt andra hållet / Steg −/+.
   AREA_KINDS now include **`ute`** (outdoors: m² shown, walls towards it not counted, own legend line).
 - **Mått & ytor in the planner (2026-10-18)** — `src/planner/geom.js` (shared by planner + planSvg/PDF):
   - **Anchored dims**: a dim end snapped to a feature keeps `ra`/`rb` ({k:"rc"|"it"|"wv"|"wf"|"wp"|"op", …}, see

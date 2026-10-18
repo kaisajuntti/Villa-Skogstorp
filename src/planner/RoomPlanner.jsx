@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { storage } from "../storage.js";
 import { canEdit } from "../config.js";
 import { uploadPhoto, deletePhoto } from "../photos.js";
-import { buildPlanSvg, itemLabel, coveredItemIds } from "./planSvg.js";
+import { buildPlanSvg, itemLabel, coveredItemIds, stairLines } from "./planSvg.js";
 import { snapCandidates as featurePoints, faceSnap, resolveDims, dimGeom, dimsBounds, areaGrid, areaSummary, areaLegend, LEGEND_STEP, kindTag, AREA_KINDS, fmtM2, regionAt, regionRects } from "./geom.js";
 
 // Ported from kok-planner-v2 (Claude artifact) — behavior parity.
@@ -38,6 +38,7 @@ const OPEN_DEFS = {
   dorr: { label: "Dörr", len: 900 },
   pardorr: { label: "Pardörr", len: 1600 },
   oppning: { label: "Öppning", len: 1000 },
+  skjut: { label: "Skjutdörr", len: 900 },
   fonster: { label: "Fönster", len: 1200 },
 };
 
@@ -58,6 +59,7 @@ const PALETTE = [
   { t: "SÄNG", w: 1600, h: 2000 },
   { t: "SOFFA", w: 2200, h: 900 },
   { t: "GARDEROB", w: 600, h: 600 },
+  { t: "TRAPPA", w: 3000, h: 900, stair: { steps: 12 } },
 ];
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -765,7 +767,7 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
   const addItem = (pDef) => {
     pushUndo();
     const id = uid("i");
-    setItems((a) => [...a, { id, t: pDef.t, x: snap(clamp(400, 0, room.w - pDef.w)), y: snap(clamp(1000, 0, room.l - pDef.h)), w: pDef.w, h: pDef.h }]);
+    setItems((a) => [...a, { id, t: pDef.t, x: snap(clamp(400, 0, room.w - pDef.w)), y: snap(clamp(1000, 0, room.l - pDef.h)), w: pDef.w, h: pDef.h, ...(pDef.stair ? { stair: { ...pDef.stair } } : {}) }]);
     setSel({ kind: "it", id }); setGroup([]);
   };
   const selOp = sel?.kind === "op" ? openings.find((o) => o.id === sel.id) : null;
@@ -986,6 +988,19 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
       const m2 = pt(g.A, g.along, o.pos + o.len, g.inward, emid);
       els.push(<line key="w" x1={c1[0]} y1={c1[1]} x2={m2[0]} y2={m2[1]} stroke={ink} strokeWidth="70" strokeLinecap="butt" />);
       els.push(<line key="wl" x1={c1[0]} y1={c1[1]} x2={m2[0]} y2={m2[1]} stroke={paper} strokeWidth="22" strokeLinecap="butt" />);
+    } else if (o.kind === "skjut") {
+      // Sliding door: jambs + the leaf (closed, solid) along one face of the wall and its open
+      // position (dashed) slid past the opening – `flip` = slides the other way, `out` = other face,
+      // `ficka` = pocket door (the leaf runs inside the wall).
+      const a0 = pt(g.A, g.along, o.pos, g.inward, g.e0), a1 = pt(g.A, g.along, o.pos, g.inward, g.e1);
+      const b0 = pt(g.A, g.along, o.pos + o.len, g.inward, g.e0), b1 = pt(g.A, g.along, o.pos + o.len, g.inward, g.e1);
+      els.push(<line key="j1" x1={a0[0]} y1={a0[1]} x2={a1[0]} y2={a1[1]} stroke={ink} strokeWidth="16" />);
+      els.push(<line key="j2" x1={b0[0]} y1={b0[1]} x2={b1[0]} y2={b1[1]} stroke={ink} strokeWidth="16" />);
+      const e = o.ficka ? emid : o.out ? g.e0 - 30 : g.e1 + 30, sh = o.flip ? -o.len : o.len;
+      const l0 = pt(g.A, g.along, o.pos, g.inward, e), l1 = pt(g.A, g.along, o.pos + o.len, g.inward, e);
+      const m0 = pt(g.A, g.along, o.pos + sh, g.inward, e), m1 = pt(g.A, g.along, o.pos + o.len + sh, g.inward, e);
+      els.push(<line key="lf" x1={l0[0]} y1={l0[1]} x2={l1[0]} y2={l1[1]} stroke={ink} strokeWidth="40" strokeLinecap="butt" />);
+      els.push(<line key="lo" x1={m0[0]} y1={m0[1]} x2={m1[0]} y2={m1[1]} stroke={o.ficka ? paper : ink} strokeWidth="14" strokeDasharray="40 30" />);
     } else if (o.kind === "oppning") {
       // Doorless opening: the two jamb reveals across the wall band.
       const a0 = pt(g.A, g.along, o.pos, g.inward, g.e0), a1 = pt(g.A, g.along, o.pos, g.inward, g.e1);
@@ -1454,13 +1469,23 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
             const isSel = selIt?.id === it.id;
             const inGroup = group.includes(it.id);
             const hl = isSel || inGroup;
+            const st = it.stair ? stairLines(it) : null;
             return (
-              <rect key={it.id} x={it.x} y={it.y} width={it.w} height={it.h}
-                onPointerDown={(e) => onItemDown(e, it)} style={{ cursor: "grab" }}
-                fill={hl ? "rgba(90,122,140,0.28)" : cab}
-                stroke={hl ? blue : ink}
-                strokeWidth={isSel ? 44 : inGroup ? 30 : 14}
-                strokeDasharray={inGroup && !isSel ? "70 45" : undefined} />
+              <g key={it.id}>
+                <rect x={it.x} y={it.y} width={it.w} height={it.h}
+                  onPointerDown={(e) => onItemDown(e, it)} style={{ cursor: "grab" }}
+                  fill={hl ? "rgba(90,122,140,0.28)" : st ? paper : cab}
+                  stroke={hl ? blue : ink}
+                  strokeWidth={isSel ? 44 : inGroup ? 30 : 14}
+                  strokeDasharray={inGroup && !isSel ? "70 45" : undefined} />
+                {st && (
+                  <g style={{ pointerEvents: "none" }} stroke={ink}>
+                    {st.treads.map(([a, b], i) => <line key={i} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} strokeWidth="10" />)}
+                    <line x1={st.arrow[0][0]} y1={st.arrow[0][1]} x2={st.arrow[1][0]} y2={st.arrow[1][1]} strokeWidth="14" />
+                    <polygon points={st.head.map((q) => q.join(",")).join(" ")} fill={ink} stroke="none" />
+                  </g>
+                )}
+              </g>
             );
           })}
           {[...itemsCovered].map((id) => { const it = items.find((x) => x.id === id); if (!it) return null; return (
@@ -1610,7 +1635,13 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
                 const g = openGeom(o);
                 return { ...o, len: clamp(o.len + 50, 300, (g ? g.L : o.pos + o.len) - o.pos) };
               })}>+50</button>
-              {selOp.kind === "dorr" && <button style={btn} onClick={() => updOp((o) => ({ ...o, flip: !o.flip }))}>↔ Vänd sida</button>}
+              <select value={selOp.kind} onChange={(e) => { const kind = e.target.value; updOp((o) => ({ ...o, kind })); }}
+                style={{ ...btn, padding: "7px 8px" }} title="Typ av öppning">
+                {Object.entries(OPEN_DEFS).map(([k, d]) => <option key={k} value={k}>{d.label}</option>)}
+              </select>
+              {(selOp.kind === "dorr" || selOp.kind === "skjut") && <button style={btn} onClick={() => updOp((o) => ({ ...o, flip: !o.flip }))}>↔ {selOp.kind === "skjut" ? "Skjuts åt andra hållet" : "Vänd sida"}</button>}
+              {selOp.kind === "skjut" && <button style={selOp.ficka ? btnOn : btn} onClick={() => updOp((o) => ({ ...o, ficka: !o.ficka || undefined }))}>Ficka i väggen</button>}
+              {selOp.kind === "skjut" && !selOp.ficka && <button style={btn} onClick={() => updOp((o) => ({ ...o, out: !o.out }))}>⇅ Andra väggsidan</button>}
               {(selOp.kind === "dorr" || selOp.kind === "pardorr") && <button style={btn} onClick={() => updOp((o) => ({ ...o, out: !(o.out ?? (o.kind === "pardorr" ? o.flip : false)) }))}>⇅ Öppnas ut/in</button>}
               <button style={{ ...btn, color: red, borderColor: red }} onClick={removeSel}>Ta bort</button>
             </>
@@ -1620,6 +1651,12 @@ export default function RoomPlanner({ storageKey, title, focus = null, spaceId =
               <div style={{ fontWeight: 600 }}>{selIt.t} <span style={{ fontFamily: mono, color: blue, fontSize: 13 }}>{selIt.w}×{selIt.h}</span></div>
               <button style={btn} onClick={renameSel}>✎ Namn</button>
               <button style={btn} onClick={() => updIt((i) => ({ ...i, lrot: i.lrot ? 0 : 1 }))}>⟲ Vrid text</button>
+              {selIt.stair && <>
+                <button style={btn} onClick={() => updIt((i) => ({ ...i, stair: { ...i.stair, rev: !i.stair.rev || undefined } }))}>⇄ Upp åt andra hållet</button>
+                <button style={btn} onClick={() => updIt((i) => ({ ...i, stair: { ...i.stair, steps: Math.max(2, (i.stair.steps || 12) - 1) } }))}>Steg −</button>
+                <span style={{ fontFamily: mono, fontSize: 13 }}>{selIt.stair.steps || Math.round(Math.max(selIt.w, selIt.h) / 250)} steg</span>
+                <button style={btn} onClick={() => updIt((i) => ({ ...i, stair: { ...i.stair, steps: (i.stair.steps || 12) + 1 } }))}>Steg +</button>
+              </>}
               <button style={btn} onClick={() => updIt((i) => ({ ...i, lx: undefined, ly: undefined, lrot: undefined }))}>↺ Text mitt</button>
               <button style={btn} onClick={() => updIt((i) => ({ ...i, w: clamp(i.w - 50, 50, 20000) }))}>B −</button>
               <button style={btn} onClick={() => updIt((i) => ({ ...i, w: clamp(i.w + 50, 50, 20000) }))}>B +</button>

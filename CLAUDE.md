@@ -481,7 +481,7 @@ vs:v1:_meta          { <storageKey>: updated_at }    // last-synced marker for m
   fjärrmotor på vinden, kanal i kökets tak till schakt **S2** (garderobshörnet i walk-in closet ovanför skafferiet).
   Tilluft via fönsterventiler (beställs med fönstren) + uteluftsdon bakom radiatorer i sovrummen. Inget don i gymmet,
   ingen extern kaminluft (för nu). Ingen murstock/fundament i källaren – prefab lättskorsten. Underlag: bildspelet "Förslag till VVS" (privat bilaga, vs-docs);
-  de äldre skisserna låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 och rensade ur git-historiken.
+  de äldre skisserna låg tidigare publikt i `public/plans/ventilation/` – borttagna 2026-10-18 (finns kvar i git-historiken tills den rensas – kräver force-push, ägarens beslut).
 - **Bergvärmepump: inverterstyrd, 0–16 kW** (rättat 2026-10-04 från ~12 kW; budget 115 000 kr inkl. VVB). Borrdjup 200 m i
   budgeten – med 16 kW och ~300 m² kan det behövas 250–300 m (låt borrfirman räkna; står i att göra-listan).
 - **El (beslutat 2026-10)**: elcentral i **städ plan 1** (tillbyggnaden), kablar ner till teknikrummet via S1 (ingen
